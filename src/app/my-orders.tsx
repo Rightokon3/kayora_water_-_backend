@@ -19,15 +19,57 @@ import { BottomTabBar } from "@/components/BottomTabBar";
 import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
 import { RiderTrackingMap } from "@/components/RiderTrackingMap";
 import { getProductById } from "@/constants/products";
-import {
-  Order,
-  OrderStatus,
-  OrderTimelineStep,
-  Rider,
-  addToCart,
-  advanceRiderPosition,
-  getOrdersWithSimulatedProgress,
-} from "@/services/storage";
+import { getUserProfile } from "@/services/storage";
+
+// Replace with your local machine IP or production URL
+const API_BASE_URL = "http://localhost:8000"; 
+
+export type OrderStatus = "Pending" | "Preparing" | "Active" | "Out for Delivery" | "Completed" | "Cancelled";
+
+export type OrderTimelineStep = {
+  key: string;
+  label: string;
+  completedAt: string | null;
+};
+
+export type Rider = {
+  id: number;
+  fullName: string;
+  phone: string;
+  vehicleType: string;
+  motorcycleRegNumber: string;
+  currentLatitude: number;
+  currentLongitude: number;
+};
+
+export type Order = {
+  id: string;
+  deliveryTiming: "asap" | "scheduled";
+  deliveryDateTime: string;
+  status: OrderStatus;
+  paymentMethod: "cash" | "card";
+  subtotal: number;
+  deliveryFee: number;
+  discount: number;
+  total: number;
+  createdAt: string;
+  deliveryCompletedAt: string | null;
+  deliveryAddress: {
+    label: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+  products: Array<{
+    productId: number;
+    name: string;
+    size: string;
+    price: number;
+    quantity: number;
+  }>;
+  timeline: OrderTimelineStep[];
+  rider: Rider | null;
+};
 
 const TRACK_ORDER_STATUSES: OrderStatus[] = ["Active", "Out for Delivery"];
 
@@ -37,10 +79,13 @@ function canTrackOrder(status: OrderStatus): boolean {
 
 type FilterTab = "all" | "active" | "past";
 
+// Arranges and maps orders accurately based on backend database statuses
 function matchesFilter(order: Order, tab: FilterTab): boolean {
   if (tab === "all") return true;
-  if (tab === "active") return TRACK_ORDER_STATUSES.includes(order.status);
-  return order.status === "Completed";
+  if (tab === "active") {
+    return ["Pending", "Preparing", "Active", "Out for Delivery"].includes(order.status);
+  }
+  return ["Completed", "Cancelled"].includes(order.status);
 }
 
 function formatNaira(amount: number): string {
@@ -48,7 +93,7 @@ function formatNaira(amount: number): string {
 }
 
 function formatOrderDate(value: string | number): string {
-  const date = typeof value === "number" ? new Date(value) : new Date(value);
+  const date = new Date(value);
   return (
     date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) +
     ", " +
@@ -92,18 +137,37 @@ export default function MyOrdersScreen() {
   const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
   const [detailsOrder, setDetailsOrder] = useState<Order | null>(null);
 
-  const loadOrders = useCallback(async () => {
-    const data = await getOrdersWithSimulatedProgress();
-    setOrders(data);
-    setIsLoading(false);
+  // Fetch all orders matching logged in profile token from Database
+  const loadOrders = useCallback(async (showSkeleton = false) => {
+    if (showSkeleton) setIsLoading(true);
+    try {
+      const authProfile = await getUserProfile();
+      const token = authProfile?.token || "";
+
+      const response = await fetch(`${API_BASE_URL}/api/orders`, {
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setOrders(data.orders || data);
+      }
+    } catch (err) {
+      console.error("Error loading orders from database:", err);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    loadOrders();
+    loadOrders(true);
   }, [loadOrders]);
 
+  // Regular interval background updates to update real-time status shifts
   useEffect(() => {
-    const interval = setInterval(loadOrders, 5000);
+    const interval = setInterval(() => loadOrders(false), 7000);
     return () => clearInterval(interval);
   }, [loadOrders]);
 
@@ -116,8 +180,27 @@ export default function MyOrdersScreen() {
     setTrackingOrder(order);
   }, []);
 
-  const handleViewDetails = useCallback((order: Order) => {
-    setDetailsOrder(order);
+  const handleViewDetails = useCallback(async (order: Order) => {
+    // Fetch individual clean database order details row
+    try {
+      const authProfile = await getUserProfile();
+      const token = authProfile?.token || "";
+
+      const response = await fetch(`${API_BASE_URL}/api/orders/${order.id}`, {
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setDetailsOrder(data.order || data);
+      } else {
+        setDetailsOrder(order); // Fallback to local item if query fails
+      }
+    } catch (err) {
+      setDetailsOrder(order);
+    }
   }, []);
 
   const handleCloseTracking = useCallback(() => {
@@ -129,16 +212,30 @@ export default function MyOrdersScreen() {
   }, []);
 
   const handleOrderAgain = useCallback(async (order: Order) => {
-    for (const product of order.products) {
-      for (let i = 0; i < product.quantity; i += 1) {
-        await addToCart(product.productId);
+    try {
+      const authProfile = await getUserProfile();
+      const token = authProfile?.token || "";
+
+      // Push all past elements right back into user api cart
+      const response = await fetch(`${API_BASE_URL}/api/orders/${order.id}/reorder`, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        toastRef.current?.show({
+          message: "Products added back to your cart.",
+          type: "success",
+        });
+        setDetailsOrder(null);
+        router.push("/my-cart");
       }
+    } catch (err) {
+      toastRef.current?.show({ message: "Failed to sync cart reorder request.", type: "error" });
     }
-    toastRef.current?.show({
-      message: "Products added back to your cart.",
-      type: "success",
-    });
-    setDetailsOrder(null);
   }, []);
 
   const handleStartShopping = useCallback(() => {
@@ -153,12 +250,16 @@ export default function MyOrdersScreen() {
 
       <FilterToggle activeFilter={activeFilter} onChange={setActiveFilter} colors={colors} />
 
-      {!isLoading && filteredOrders.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.centerWrapper}>
+          <Text style={{ color: colors.grayText }}>Fetching database logs...</Text>
+        </View>
+      ) : filteredOrders.length === 0 ? (
         <EmptyOrders colors={colors} filter={activeFilter} onStartShopping={handleStartShopping} />
       ) : (
         <FlatList
           data={filteredOrders}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           renderItem={({ item, index }) => (
@@ -191,19 +292,11 @@ export default function MyOrdersScreen() {
 
 const FILTER_OPTIONS: Array<{ key: FilterTab; label: string }> = [
   { key: "all", label: "All Orders" },
-  { key: "active", label: "Active Orders" },
-  { key: "past", label: "Past Orders" },
+  { key: "active", label: "Active" },
+  { key: "past", label: "Completed" },
 ];
 
-function FilterToggle({
-  activeFilter,
-  onChange,
-  colors,
-}: {
-  activeFilter: FilterTab;
-  onChange: (filter: FilterTab) => void;
-  colors: ThemeColors;
-}) {
+function FilterToggle({ activeFilter, onChange, colors }: { activeFilter: FilterTab; onChange: (filter: FilterTab) => void; colors: ThemeColors; }) {
   const [containerWidth, setContainerWidth] = useState(0);
   const indicatorX = useSharedValue(0);
 
@@ -267,6 +360,8 @@ function StatusBadge({ status, colors }: { status: OrderStatus; colors: ThemeCol
         -1,
         false
       );
+    } else {
+      pulse.value = 1;
     }
   }, [status]);
 
@@ -282,25 +377,12 @@ function StatusBadge({ status, colors }: { status: OrderStatus; colors: ThemeCol
   );
 }
 
-function OrderCard({
-  order,
-  index,
-  colors,
-  onTrackOrder,
-  onViewDetails,
-}: {
-  order: Order;
-  index: number;
-  colors: ThemeColors;
-  onTrackOrder: () => void;
-  onViewDetails: () => void;
-}) {
+function OrderCard({ order, index, colors, onTrackOrder, onViewDetails }: { order: Order; index: number; colors: ThemeColors; onTrackOrder: () => void; onViewDetails: () => void; }) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(16);
 
   useEffect(() => {
     const easing = ReanimatedEasing.out(ReanimatedEasing.cubic);
-    const delay = Math.min(index, 8) * 60;
     opacity.value = withTiming(1, { duration: 360 });
     translateY.value = withTiming(0, { duration: 360, easing });
   }, [index]);
@@ -317,14 +399,14 @@ function OrderCard({
     <Animated.View style={[styles.orderCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }, cardStyle]}>
       <View style={styles.orderCardHeader}>
         <Text style={[styles.orderId, { color: colors.darkText }]} numberOfLines={1}>
-          Order #{order.id.replace("order_", "").slice(-6).toUpperCase()}
+          Order #{order.id.toString().toUpperCase()}
         </Text>
         <StatusBadge status={order.status} colors={colors} />
       </View>
 
       <Text style={[styles.orderDate, { color: colors.grayText }]}>Ordered on {formatOrderDate(order.createdAt)}</Text>
       <Text style={[styles.orderAddress, { color: colors.grayText }]} numberOfLines={1}>
-        {order.deliveryAddress.label} - {order.deliveryAddress.address}
+        {order.deliveryAddress?.label} - {order.deliveryAddress?.address}
       </Text>
 
       <View style={styles.orderMetaRow}>
@@ -351,34 +433,45 @@ function OrderCard({
   );
 }
 
-function TrackOrderBottomSheet({
-  order,
-  colors,
-  onClose,
-}: {
-  order: Order | null;
-  colors: ThemeColors;
-  onClose: () => void;
-}) {
+function TrackOrderBottomSheet({ order, colors, onClose }: { order: Order | null; colors: ThemeColors; onClose: () => void; }) {
   const translateY = useSharedValue(600);
-  const [liveOrder, setLiveOrder] = useState<Order | null>(order);
+  const [liveOrder, setLiveOrder] = useState<Order | null>(null);
 
   useEffect(() => {
-    setLiveOrder(order);
     if (order) {
+      setLiveOrder(order);
       translateY.value = withSpring(0, { damping: 18, stiffness: 180 });
     } else {
       translateY.value = withTiming(600, { duration: 240 });
     }
   }, [order]);
 
+  // Real-time backend tracker loop while modal tracking view stays open
   useEffect(() => {
     if (!order) return;
-    const interval = setInterval(async () => {
-      const updated = await advanceRiderPosition(order.id);
-      const refreshed = updated.find((item) => item.id === order.id);
-      if (refreshed) setLiveOrder(refreshed);
-    }, 4000);
+    
+    const fetchLiveTrack = async () => {
+      try {
+        const authProfile = await getUserProfile();
+        const token = authProfile?.token || "";
+
+        const response = await fetch(`${API_BASE_URL}/api/orders/${order.id}/track`, {
+          headers: {
+            "Accept": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        if (response.ok && data.order) {
+          setLiveOrder(data.order);
+        }
+      } catch (err) {
+        console.error("Tracking connection issue:", err);
+      }
+    };
+
+    fetchLiveTrack();
+    const interval = setInterval(fetchLiveTrack, 4000);
     return () => clearInterval(interval);
   }, [order]);
 
@@ -408,12 +501,12 @@ function TrackOrderBottomSheet({
           <View style={styles.mapWrapper}>
             {rider ? (
               <RiderTrackingMap
-                customerLatitude={liveOrder.deliveryAddress.latitude}
-                customerLongitude={liveOrder.deliveryAddress.longitude}
-                riderLatitude={rider.currentLatitude}
-                riderLongitude={rider.currentLongitude}
-                destinationLatitude={liveOrder.deliveryAddress.latitude}
-                destinationLongitude={liveOrder.deliveryAddress.longitude}
+                customerLatitude={Number(liveOrder.deliveryAddress.latitude)}
+                customerLongitude={Number(liveOrder.deliveryAddress.longitude)}
+                riderLatitude={Number(rider.currentLatitude)}
+                riderLongitude={Number(rider.currentLongitude)}
+                destinationLatitude={Number(liveOrder.deliveryAddress.latitude)}
+                destinationLongitude={Number(liveOrder.deliveryAddress.longitude)}
               />
             ) : (
               <View style={[styles.mapPlaceholder, { backgroundColor: colors.inputBackground }]}>
@@ -438,8 +531,8 @@ function TrackOrderBottomSheet({
 
 function estimateEtaMinutes(order: Order): number {
   if (!order.rider) return 0;
-  const dLat = order.deliveryAddress.latitude - order.rider.currentLatitude;
-  const dLng = order.deliveryAddress.longitude - order.rider.currentLongitude;
+  const dLat = Number(order.deliveryAddress.latitude) - Number(order.rider.currentLatitude);
+  const dLng = Number(order.deliveryAddress.longitude) - Number(order.rider.currentLongitude);
   const distance = Math.sqrt(dLat * dLat + dLng * dLng);
   const minutes = Math.max(1, Math.round(distance * 800));
   return Math.min(minutes, 45);
@@ -462,32 +555,11 @@ function RiderCard({ rider, status, colors }: { rider: Rider; status: OrderStatu
       </View>
 
       <Text style={[styles.riderStatusLine, { color: colors.primaryBlue }]}>Current status: {status}</Text>
-
-      <View style={styles.riderActionsRow}>
-        <Pressable style={[styles.riderActionButton, { backgroundColor: colors.primaryBlue }]}>
-          <Ionicons name="call" size={15} color="#FFFFFF" />
-          <Text style={styles.riderActionText}>Call Rider</Text>
-        </Pressable>
-        <Pressable style={[styles.riderActionButton, styles.riderActionButtonOutline, { borderColor: colors.border }]}>
-          <Ionicons name="chatbubble" size={15} color={colors.darkText} />
-          <Text style={[styles.riderActionText, { color: colors.darkText }]}>Chat Rider</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
 
-function OrderDetailsModal({
-  order,
-  colors,
-  onClose,
-  onOrderAgain,
-}: {
-  order: Order | null;
-  colors: ThemeColors;
-  onClose: () => void;
-  onOrderAgain: (order: Order) => void;
-}) {
+function OrderDetailsModal({ order, colors, onClose, onOrderAgain }: { order: Order | null; colors: ThemeColors; onClose: () => void; onOrderAgain: (order: Order) => void; }) {
   if (!order) return null;
 
   return (
@@ -503,34 +575,27 @@ function OrderDetailsModal({
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailsScrollContent}>
           <Text style={[styles.detailsOrderId, { color: colors.darkText }]}>
-            #{order.id.replace("order_", "").slice(-6).toUpperCase()}
+            #{order.id.toString().toUpperCase()}
           </Text>
           <View style={styles.detailsBadgeRow}>
             <StatusBadge status={order.status} colors={colors} />
           </View>
 
           <DetailsSection title="Order Information" colors={colors}>
-            <DetailsRow
-              label="Payment Method"
-              value={order.paymentMethod === "cash" ? "Cash on Delivery" : "Card Payment"}
-              colors={colors}
-            />
-            <DetailsRow label="Delivery Address" value={order.deliveryAddress.address} colors={colors} />
+            <DetailsRow label="Timing Configuration" value={order.deliveryTiming === "asap" ? "ASAP (Instant Mode)" : "Scheduled Reservation"} colors={colors} />
+            <DetailsRow label="Payment Method" value={order.paymentMethod === "cash" ? "Cash on Delivery" : "Card Payment"} colors={colors} />
+            <DetailsRow label="Delivery Address" value={order.deliveryAddress?.address} colors={colors} />
             <DetailsRow label="Delivery Date" value={new Date(order.deliveryDateTime).toLocaleDateString()} colors={colors} />
-            <DetailsRow
-              label="Delivery Time"
-              value={new Date(order.deliveryDateTime).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-              colors={colors}
-            />
+            <DetailsRow label="Delivery Time" value={new Date(order.deliveryDateTime).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} colors={colors} />
             <DetailsRow label="Order Created" value={formatOrderDate(order.createdAt)} colors={colors} />
           </DetailsSection>
 
           <DetailsSection title="Order Timeline" colors={colors}>
-            <OrderTimelineView timeline={order.timeline} colors={colors} />
+            <OrderTimelineView timeline={order.timeline || []} colors={colors} />
           </DetailsSection>
 
           <DetailsSection title="Products Ordered" colors={colors}>
-            {order.products.map((product) => (
+            {order.products?.map((product) => (
               <ProductLineItem key={product.productId} product={product} colors={colors} />
             ))}
           </DetailsSection>
@@ -544,11 +609,11 @@ function OrderDetailsModal({
           </DetailsSection>
 
           <DetailsSection title="Payment Summary" colors={colors}>
-            <DetailsRow label="Subtotal" value={formatNaira(order.subtotal)} colors={colors} />
-            <DetailsRow label="Delivery Fee" value={formatNaira(order.deliveryFee)} colors={colors} />
-            <DetailsRow label="Discount" value={"-" + formatNaira(order.discount)} colors={colors} />
+            <DetailsRow label="Subtotal" value={formatNaira(Number(order.subtotal))} colors={colors} />
+            <DetailsRow label="Delivery Fee" value={formatNaira(Number(order.deliveryFee))} colors={colors} />
+            <DetailsRow label="Discount" value={"-" + formatNaira(Number(order.discount))} colors={colors} />
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-            <DetailsRow label="Grand Total" value={formatNaira(order.total)} colors={colors} isTotal />
+            <DetailsRow label="Grand Total" value={formatNaira(Number(order.total))} colors={colors} isTotal />
           </DetailsSection>
 
           <Pressable onPress={() => onOrderAgain(order)} style={[styles.orderAgainButton, { backgroundColor: colors.primaryBlue }]}>
@@ -570,36 +635,13 @@ function DetailsSection({ title, colors, children }: { title: string; colors: Th
   );
 }
 
-function DetailsRow({
-  label,
-  value,
-  colors,
-  isTotal,
-}: {
-  label: string;
-  value: string;
-  colors: ThemeColors;
-  isTotal?: boolean;
-}) {
+function DetailsRow({ label, value, colors, isTotal }: { label: string; value: string; colors: ThemeColors; isTotal?: boolean; }) {
   return (
     <View style={styles.detailsRow}>
-      <Text
-        style={[
-          styles.detailsRowLabel,
-          { color: colors.grayText },
-          isTotal && styles.detailsRowLabelTotal,
-          isTotal && { color: colors.darkText },
-        ]}
-      >
+      <Text style={[styles.detailsRowLabel, { color: colors.grayText }, isTotal && styles.detailsRowLabelTotal, isTotal && { color: colors.darkText }]}>
         {label}
       </Text>
-      <Text
-        style={[
-          styles.detailsRowValue,
-          { color: isTotal ? colors.primaryBlue : colors.darkText },
-          isTotal && styles.detailsRowValueTotal,
-        ]}
-      >
+      <Text style={[styles.detailsRowValue, { color: isTotal ? colors.primaryBlue : colors.darkText }, isTotal && styles.detailsRowValueTotal]}>
         {value}
       </Text>
     </View>
@@ -665,7 +707,7 @@ function UnassignedRiderPlaceholder({ colors }: { colors: ThemeColors }) {
   return (
     <View style={styles.unassignedPlaceholder}>
       <Ionicons name="time-outline" size={32} color={colors.grayText} />
-      <Text style={[styles.unassignedText, { color: colors.grayText }]}>Rider has not yet been assigned.</Text>
+      <Text style={[styles.unassignedText, { color: colors.grayText }]}>Rider assignment processing...</Text>
     </View>
   );
 }
@@ -689,19 +731,7 @@ function OrderTimelineView({ timeline, colors }: { timeline: OrderTimelineStep[]
   );
 }
 
-function TimelineRow({
-  step,
-  isCompleted,
-  isCurrent,
-  isLast,
-  colors,
-}: {
-  step: OrderTimelineStep;
-  isCompleted: boolean;
-  isCurrent: boolean;
-  isLast: boolean;
-  colors: ThemeColors;
-}) {
+function TimelineRow({ step, isCompleted, isCurrent, isLast, colors }: { step: OrderTimelineStep; isCompleted: boolean; isCurrent: boolean; isLast: boolean; colors: ThemeColors; }) {
   const pulse = useSharedValue(1);
 
   useEffect(() => {
@@ -711,11 +741,13 @@ function TimelineRow({
         -1,
         false
       );
+    } else {
+      pulse.value = 1;
     }
   }, [isCurrent]);
 
   const dotStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: isCurrent ? pulse.value : 1 }],
+    transform: [{ scale: pulse.value }],
   }));
 
   const dotColor = isCompleted ? colors.primaryBlue : isCurrent ? colors.primaryBlue : colors.border;
@@ -745,15 +777,7 @@ function TimelineRow({
   );
 }
 
-function EmptyOrders({
-  colors,
-  filter,
-  onStartShopping,
-}: {
-  colors: ThemeColors;
-  filter: FilterTab;
-  onStartShopping: () => void;
-}) {
+function EmptyOrders({ colors, filter, onStartShopping }: { colors: ThemeColors; filter: FilterTab; onStartShopping: () => void; }) {
   const opacity = useSharedValue(0);
   useEffect(() => {
     opacity.value = withTiming(1, { duration: 420 });
@@ -762,10 +786,10 @@ function EmptyOrders({
 
   const message =
     filter === "active"
-      ? "No active orders right now."
+      ? "No active premium orders tracking right now."
       : filter === "past"
-      ? "No past orders yet."
-      : "You haven't placed any orders yet.";
+      ? "No past completed orders found."
+      : "You haven't placed any hydration orders yet.";
 
   return (
     <Animated.View style={[styles.emptyContainer, animatedStyle]}>
@@ -784,447 +808,88 @@ function EmptyOrders({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  toggleContainer: {
-    flexDirection: "row",
-    marginHorizontal: 20,
-    marginBottom: 14,
-    borderRadius: 14,
-    padding: 4,
-    position: "relative",
-    overflow: "hidden",
-  },
-  toggleIndicator: {
-    position: "absolute",
-    top: 4,
-    bottom: 4,
-    left: 4,
-    borderRadius: 11,
-  },
-  toggleSegment: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toggleLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  orderCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 14,
-  },
-  orderCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  orderId: {
-    fontSize: 15,
-    fontWeight: "800",
-    flexShrink: 1,
-    marginRight: 8,
-  },
-  orderDate: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  orderAddress: {
-    fontSize: 12,
-    marginBottom: 10,
-  },
-  orderMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 14,
-  },
-  metaChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  metaChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  orderTotal: {
-    fontSize: 14,
-    fontWeight: "800",
-    marginLeft: "auto",
-  },
-  orderButtonsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  trackButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    height: 44,
-    borderRadius: 12,
-  },
-  trackButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  detailsButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  detailsButtonFull: {
-    flex: 1,
-  },
-  detailsButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  sheetOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  bottomSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 24,
-    maxHeight: "88%",
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(0,0,0,0.15)",
-    alignSelf: "center",
-    marginBottom: 12,
-  },
-  sheetHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  sheetTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-  },
-  mapWrapper: {
-    width: "100%",
-    height: 220,
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 14,
-  },
-  mapPlaceholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  mapPlaceholderText: {
-    fontSize: 13,
-  },
-  etaCard: {
-    borderRadius: 14,
-    padding: 14,
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  etaLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
-  etaValue: {
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  riderCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-  },
-  riderCardTop: {
-    flexDirection: "row",
-    marginBottom: 10,
-  },
-  riderAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  riderAvatarText: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  riderInfoColumn: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  riderName: {
-    fontSize: 15,
-    fontWeight: "800",
-    marginBottom: 2,
-  },
-  riderDetail: {
-    fontSize: 12,
-    marginBottom: 1,
-  },
-  riderStatusLine: {
-    fontSize: 12,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-  riderActionsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  riderActionButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    height: 42,
-    borderRadius: 12,
-  },
-  riderActionButtonOutline: {
-    backgroundColor: "transparent",
-    borderWidth: 1.5,
-  },
-  riderActionText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
+  centerWrapper: { flex: 1, alignItems: "center", justifyContent: "center" },
+  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 8 },
+  headerTitle: { fontSize: 22, fontWeight: "800" },
+  toggleContainer: { flexDirection: "row", marginHorizontal: 20, marginBottom: 14, borderRadius: 14, padding: 4, position: "relative", overflow: "hidden" },
+  toggleIndicator: { position: "absolute", top: 4, bottom: 4, left: 4, borderRadius: 11 },
+  toggleSegment: { flex: 1, paddingVertical: 10, alignItems: "center", justifyContent: "center" },
+  toggleLabel: { fontSize: 12, fontWeight: "700" },
+  listContent: { paddingHorizontal: 20, paddingBottom: 24 },
+  orderCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 14 },
+  orderCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  orderId: { fontSize: 15, fontWeight: "800", flexShrink: 1, marginRight: 8 },
+  orderDate: { fontSize: 12, marginBottom: 2 },
+  orderAddress: { fontSize: 12, marginBottom: 10 },
+  orderMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
+  metaChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  metaChipText: { fontSize: 11, fontWeight: "600" },
+  orderTotal: { fontSize: 14, fontWeight: "800", marginLeft: "auto" },
+  orderButtonsRow: { flexDirection: "row", gap: 10 },
+  trackButton: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 12 },
+  trackButtonText: { fontSize: 13, fontWeight: "700", color: "#FFFFFF" },
+  detailsButton: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  detailsButtonFull: { flex: 1 },
+  detailsButtonText: { fontSize: 13, fontWeight: "700" },
+  statusBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  statusBadgeText: { fontSize: 11, fontWeight: "700" },
+  sheetOverlay: { flex: 1, justifyContent: "flex-end" },
+  sheetBackdrop: { ...StyleSheet.absoluteFill },
+  bottomSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 24, maxHeight: "88%" },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(0,0,0,0.15)", alignSelf: "center", marginBottom: 12 },
+  sheetHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  sheetTitle: { fontSize: 17, fontWeight: "800" },
+  mapWrapper: { width: "100%", height: 220, borderRadius: 16, overflow: "hidden", marginBottom: 14 },
+  mapPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
+  mapPlaceholderText: { fontSize: 13 },
+  etaCard: { borderRadius: 14, padding: 14, alignItems: "center", marginBottom: 14 },
+  etaLabel: { fontSize: 12, fontWeight: "700", marginBottom: 2 },
+  etaValue: { fontSize: 22, fontWeight: "800" },
+  riderCard: { borderRadius: 16, borderWidth: 1, padding: 16 },
+  riderCardTop: { flexDirection: "row", marginBottom: 10 },
+  riderAvatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", marginRight: 12 },
+  riderAvatarText: { fontSize: 20, fontWeight: "800", color: "#FFFFFF" },
+  riderInfoColumn: { flex: 1, justifyContent: "center" },
+  riderName: { fontSize: 15, fontWeight: "800", marginBottom: 2 },
+  riderDetail: { fontSize: 12, marginBottom: 1 },
+  riderStatusLine: { fontSize: 12, fontWeight: "700", marginBottom: 12 },
   detailsRoot: { flex: 1 },
-  detailsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  detailsHeaderTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  detailsScrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-  },
-  detailsOrderId: {
-    fontSize: 26,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  detailsBadgeRow: {
-    marginBottom: 18,
-  },
-  detailsSection: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 14,
-  },
-  detailsSectionTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    marginBottom: 12,
-  },
-  detailsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  detailsRowLabel: {
-    fontSize: 13,
-    flexShrink: 1,
-    marginRight: 8,
-  },
-  detailsRowLabelTotal: {
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  detailsRowValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "right",
-  },
-  detailsRowValueTotal: {
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  summaryDivider: {
-    height: 1,
-    marginVertical: 6,
-  },
-  productLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  productLineImageWrapper: {
-    width: 52,
-    height: 52,
-    borderRadius: 10,
-    overflow: "hidden",
-    marginRight: 12,
-  },
-  productLineImage: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  productLineBody: {
-    flex: 1,
-  },
-  productLineName: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  productLineMeta: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  productLineSubtotal: {
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  riderSummaryRow: {
-    flexDirection: "row",
-  },
-  unassignedPlaceholder: {
-    alignItems: "center",
-    paddingVertical: 16,
-    gap: 8,
-  },
-  unassignedText: {
-    fontSize: 13,
-    textAlign: "center",
-  },
-  timelineRow: {
-    flexDirection: "row",
-  },
-  timelineDotColumn: {
-    alignItems: "center",
-    marginRight: 12,
-  },
-  timelineDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  timelineConnector: {
-    width: 2,
-    flex: 1,
-    minHeight: 24,
-  },
-  timelineTextColumn: {
-    flex: 1,
-    paddingBottom: 16,
-  },
-  timelineLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  timelineLabelActive: {
-    fontWeight: "800",
-  },
-  timelineTimestamp: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  orderAgainButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    height: 56,
-    borderRadius: 28,
-    marginTop: 4,
-  },
-  orderAgainText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
-  },
-  emptyIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  emptyButton: {
-    paddingHorizontal: 28,
-    height: 50,
-    borderRadius: 25,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyButtonText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
+  detailsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  detailsHeaderTitle: { fontSize: 16, fontWeight: "800" },
+  detailsScrollContent: { paddingHorizontal: 20, paddingBottom: 32 },
+  detailsOrderId: { fontSize: 26, fontWeight: "800", marginBottom: 8 },
+  detailsBadgeRow: { marginBottom: 18 },
+  detailsSection: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 14 },
+  detailsSectionTitle: { fontSize: 14, fontWeight: "800", marginBottom: 12 },
+  detailsRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  detailsRowLabel: { fontSize: 13, flexShrink: 1, marginRight: 8 },
+  detailsRowLabelTotal: { fontSize: 15, fontWeight: "800" },
+  detailsRowValue: { fontSize: 13, fontWeight: "600", textAlign: "right" },
+  detailsRowValueTotal: { fontSize: 16, fontWeight: "800" },
+  summaryDivider: { height: 1, marginVertical: 6 },
+  productLine: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  productLineImageWrapper: { width: 52, height: 52, borderRadius: 10, overflow: "hidden", marginRight: 12 },
+  productLineImage: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
+  productLineBody: { flex: 1 },
+  productLineName: { fontSize: 14, fontWeight: "700" },
+  productLineMeta: { fontSize: 11, marginTop: 1 },
+  productLineSubtotal: { fontSize: 13, fontWeight: "800" },
+  riderSummaryRow: { flexDirection: "row" },
+  unassignedPlaceholder: { alignItems: "center", paddingVertical: 16, gap: 8 },
+  unassignedText: { fontSize: 13, textAlign: "center" },
+  timelineRow: { flexDirection: "row" },
+  timelineDotColumn: { alignItems: "center", marginRight: 12 },
+  timelineDot: { width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  timelineConnector: { width: 2, flex: 1, minHeight: 24 },
+  timelineTextColumn: { flex: 1, paddingBottom: 16 },
+  timelineLabel: { fontSize: 13, fontWeight: "600" },
+  timelineLabelActive: { fontWeight: "800" },
+  timelineTimestamp: { fontSize: 11, marginTop: 2 },
+  orderAgainButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 56, borderRadius: 28, marginTop: 4 },
+  orderAgainText: { fontSize: 16, fontWeight: "800", color: "#FFFFFF" },
+  emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
+  emptyIconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  emptyTitle: { fontSize: 15, fontWeight: "700", textAlign: "center", marginBottom: 20 },
+  emptyButton: { paddingHorizontal: 28, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center" },
+  emptyButtonText: { fontSize: 14, fontWeight: "800", color: "#FFFFFF" },
 });
