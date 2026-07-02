@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "kayora_water",
+    "slug": "kayora_water",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/kayora-logo.png",
+    "scheme": "kayorawater",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/images/kayora-logo.png"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/kayora-logo.png",
+        "backgroundImage": "./assets/images/kayora-logo.png",
+        "monochromeImage": "./assets/images/kayora-logo.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.kayorawater.app"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/kayora-logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#208AEF",
+          "android": {
+            "image": "./assets/images/kayora-logo.png",
+            "imageWidth": 76
+          }
+        }
+      ],
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2775ea7a-1229-4753-8904-54806c1c255f"
+      }
+    }
+  }
+}
