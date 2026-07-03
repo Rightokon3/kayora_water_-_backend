@@ -52,8 +52,7 @@ import { StaticMap } from "@/components/StaticMap";
 import { useTheme } from "@/hooks/useTheme";
 import {
   BusinessType,
-  DistributorApplication,
-  saveDistributorApplication,
+  getUserProfile,
 } from "@/services/storage";
 import { validateEmail, validatePhone } from "../../utils/validation";
 
@@ -61,6 +60,7 @@ import { validateEmail, validatePhone } from "../../utils/validation";
 // Constants
 // ---------------------------------------------------------------------------
 
+const API_BASE_URL = "http://127.0.0.1:8000";
 const KAYORA_PHONE = "+2348012345678";
 const KAYORA_EMAIL = "info@kayorawater.com";
 const KAYORA_LAT = 4.6548;
@@ -250,6 +250,7 @@ export default function ContactsScreen() {
 // HeroCard
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line no-undef
 function HeroCard({
   colors,
   onApply,
@@ -351,6 +352,7 @@ type ContactCardData = {
   lines: string[];
 };
 
+// eslint-disable-next-line no-undef
 function ContactInfoCard({
   card,
   index,
@@ -410,6 +412,7 @@ function ContactInfoCard({
 // MapCard
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line no-undef
 function MapCard({
   colors,
   onOpenMaps,
@@ -458,6 +461,7 @@ function FaqSection({ colors }: { colors: ThemeColors }) {
   );
 }
 
+// eslint-disable-next-line no-undef
 function FaqItem({
   item,
   index,
@@ -594,6 +598,7 @@ const INITIAL_FORM: FormValues = {
   additionalInfo: "",
 };
 
+// eslint-disable-next-line no-undef
 function ApplicationModal({
   visible,
   colors,
@@ -606,7 +611,6 @@ function ApplicationModal({
   toastRef: React.RefObject<AnimatedToastRef>;
 }) {
   const [form, setForm] = useState<FormValues>(INITIAL_FORM);
-  const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Set<keyof FormValues>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -647,37 +651,57 @@ function ApplicationModal({
 
     setIsSubmitting(true);
     try {
-      const application: DistributorApplication = {
-        id: "app_" + Date.now(),
-        fullName: form.fullName.trim(),
-        businessName: form.businessName.trim(),
-        businessType: form.businessType as BusinessType,
-        city: form.city.trim(),
-        lga: form.lga.trim(),
-        state: form.state.trim(),
-        phone: form.phone.trim(),
-        whatsapp: form.whatsapp.trim() || undefined,
-        email: form.email.trim().toLowerCase(),
-        estimatedMonthlyVolume: form.estimatedMonthlyVolume.trim(),
-        yearsInBusiness: form.yearsInBusiness.trim() || undefined,
-        additionalInfo: form.additionalInfo.trim() || undefined,
-        submittedAt: Date.now(),
-      };
+      const user = await getUserProfile();
+      const token = user?.token || "";
 
-      await saveDistributorApplication(application);
+      const response = await fetch(`${API_BASE_URL}/api/distributor/apply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fullName: form.fullName.trim(),
+          businessName: form.businessName.trim(),
+          businessType: form.businessType,
+          city: form.city.trim(),
+          lga: form.lga.trim(),
+          state: form.state.trim(),
+          phone: form.phone.trim(),
+          whatsapp: form.whatsapp.trim() || null,
+          email: form.email.trim().toLowerCase(),
+          estimatedMonthlyVolume: form.estimatedMonthlyVolume.trim(),
+          yearsInBusiness: form.yearsInBusiness.trim() || null,
+          additionalInfo: form.additionalInfo.trim() || null,
+        }),
+      });
 
-      setShowSuccess(true);
-      successScale.value = withSpring(1, { damping: 12, stiffness: 180 });
-      successOpacity.value = withTiming(1, { duration: 300 });
+      if (response.ok) {
+        setShowSuccess(true);
+        successScale.value = withSpring(1, { damping: 12, stiffness: 180 });
+        successOpacity.value = withTiming(1, { duration: 300 });
 
-      setTimeout(() => {
-        setShowSuccess(false);
-        setForm(INITIAL_FORM);
-        setTouched(new Set());
-        successScale.value = 0.7;
-        successOpacity.value = 0;
-        onClose();
-      }, 2200);
+        setTimeout(() => {
+          setShowSuccess(false);
+          setForm(INITIAL_FORM);
+          setTouched(new Set());
+          successScale.value = 0.7;
+          successOpacity.value = 0;
+          onClose();
+        }, 2200);
+      } else {
+        const errorData = await response.json();
+        toastRef.current?.show({
+          message: errorData.message || "Failed to submit application.",
+          type: "error",
+        });
+      }
+    } catch (err) {
+      toastRef.current?.show({
+        message: "Network error connecting to server.",
+        type: "error",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -990,6 +1014,7 @@ function ApplicationModal({
   );
 }
 
+// eslint-disable-next-line no-undef
 function FormField({
   label,
   value,

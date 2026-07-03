@@ -273,15 +273,24 @@ export default function DashboardScreen() {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={columns > 1 ? styles.row : undefined}
           showsVerticalScrollIndicator={false}
-          ListHeaderComponent={
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.darkText }]}>Our Products</Text>
-              <Pressable onPress={handleViewAllPress} style={styles.viewAllButton}>
-                <Text style={[styles.viewAllText, { color: colors.primaryBlue }]}>View All</Text>
-                <Ionicons name="arrow-forward" size={14} color={colors.primaryBlue} />
-              </Pressable>
-            </View>
-          }
+ListHeaderComponent={
+  <View style={styles.sectionHeader}>
+    {/* 👑 DROP THE DISTRIBUTOR BADGE RIGHT HERE */}
+    {profile?.account_type === "distributor" && (
+      <View style={{ backgroundColor: "#E3F2FD", borderColor: "#1E88E5", borderWidth: 1, padding: 8, borderRadius: 10, marginBottom: 10, width: "100%" }}>
+        <Text style={{ color: "#1E88E5", fontWeight: "700", fontSize: 12, textAlign: "center" }}>
+          🌟 Kayora Authorized Distributor Tier (Discounted Rates Applied)
+        </Text>
+      </View>
+    )}
+
+    <Text style={[styles.sectionTitle, { color: colors.darkText }]}>Our Products</Text>
+    <Pressable onPress={handleViewAllPress} style={styles.viewAllButton}>
+      <Text style={[styles.viewAllText, { color: colors.primaryBlue }]}>View All</Text>
+      <Ionicons name="arrow-forward" size={14} color={colors.primaryBlue} />
+    </Pressable>
+  </View>
+}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="water-outline" size={36} color={colors.grayText} />
@@ -379,6 +388,10 @@ const ProductCard = React.memo(function ProductCard({ product, index, columns, c
         <View style={styles.cardBody}>
           <Text style={[styles.cardSize, { color: colors.goldAccent }]}>{product.size}</Text>
           <Text style={[styles.cardName, { color: colors.darkText }]}>{product.name}</Text>
+          {/* 💰 DROP THE PRICE TAG RIGHT HERE */}
+  <Text style={{ fontSize: 15, fontWeight: "800", color: colors.primaryBlue, marginVertical: 4 }}>
+    ₦{((product as any).price / 100).toLocaleString()}
+  </Text>
           <Text style={[styles.cardTagline, { color: colors.goldAccent }]}>{product.tagline || ""}</Text>
           <Text style={[styles.cardDescription, { color: colors.grayText }]} numberOfLines={3}>
             {product.short_description || ""}

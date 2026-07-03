@@ -6,6 +6,7 @@ export interface UserProfile {
   token: string;
   username: string;
   email: string;
+  account_type?: "customer" | "distributor";
   profileImageUri: string | null;
 }
 
@@ -133,5 +134,22 @@ export async function addToCart(productId: number, quantity: number = 1): Promis
     }
   } catch (error) {
     console.error("Failed to add item to local storage:", error);
+  }
+}
+export async function deleteAllUserData(): Promise<void> {
+  try {
+    if (Platform.OS === "web") {
+      localStorage.removeItem(PROFILE_KEY);
+      localStorage.removeItem(ADDRESSES_KEY);
+      localStorage.removeItem(ROUTE_SETUP_KEY);
+      localStorage.removeItem(CART_KEY);
+    } else {
+      await SecureStore.deleteItemAsync(PROFILE_KEY);
+      await SecureStore.deleteItemAsync(ADDRESSES_KEY);
+      await SecureStore.deleteItemAsync(ROUTE_SETUP_KEY);
+      await SecureStore.deleteItemAsync(CART_KEY);
+    }
+  } catch (error) {
+    console.error("Failed to cleanly wipe application persistent local state data keys:", error);
   }
 }

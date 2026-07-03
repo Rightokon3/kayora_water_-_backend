@@ -1,12 +1,7 @@
-
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -19,1019 +14,498 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSpring,
-  withTiming,
-  Easing as ReanimatedEasing,
-} from "react-native-reanimated";
+import * as ImagePicker from "expo-image-picker";
 
-import { useTheme, ThemeMode } from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
-import { getSavedAddresses, saveAddresses } from "@/services/storage";
 import {
   getUserProfile,
   UserProfile,
   saveUserProfile,
-  getSavedCards,
-  SavedCard,
-  addSavedCard,
-  deleteSavedCard,
-  setDefaultCard,
-  getNotificationPreferences,
-  saveNotificationPreferences,
-  NotificationPreferences,
-  saveThemePreference,
+  getSavedAddresses,
   deleteAllUserData,
 } from "@/services/storage";
-import { SavedAddress } from "@/types/location";
 
-type ThemeColors = ReturnType<typeof useTheme>["colors"];
+// Temp fallback interfaces to stop TS errors until you implement card storage
+interface SavedCard {
+  id: string;
+  bankName: string;
+  maskedNumber: string;
+  expiryDate: string;
+  cardType: "Visa" | "Mastercard" | "Verve" | "Other";
+  isDefault: boolean;
+}
 
-const APP_VERSION = "1.0.0";
+interface NotificationPreferences {
+  orderNotifications: boolean;
+  promotions: boolean;
+  newProducts: boolean;
+  locationServices: boolean;
+}
 
-const DELETE_REASONS = [
-  "I no longer use Kayora.",
-  "I created another account.",
-  "Too many notifications.",
-  "Delivery experience.",
-  "Payment issues.",
-  "App performance.",
-  "Privacy concerns.",
-  "Other",
-];
-
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
+const API_BASE_URL = "http://localhost:8000"; 
 
 export default function SettingsScreen() {
-  const { colors, mode, setMode } = useTheme();
+  const { colors } = useTheme();
   const toastRef = useRef<AnimatedToastRef>(null);
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [addresses, setAddresses] = useState<SavedAddress[]>([]);
-  const [cards, setCards] = useState<SavedCard[]>([]);
-  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>({
-    orderNotifications: true,
-    promotions: true,
-    newProducts: false,
-    locationServices: false,
-  });
+  // Profile Form Fields
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [accountType, setAccountType] = useState("customer"); // <-- Added state to track distributor tier safely
+  const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [pendingPictureBase64, setPendingPictureBase64] = useState<string | null>(null);
+  const [shouldRemovePicture, setShouldRemovePicture] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showAddCard, setShowAddCard] = useState(false);
-  const [deleteCardTarget, setDeleteCardTarget] = useState<SavedCard | null>(null);
-  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
-  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  // App Toggles (Persistent Boolean Tracking States)
+  const [orderNotifications, setOrderNotifications] = useState(true);
+  const [newProductsNotifications, setNewProductsNotifications] = useState(true);
 
-  const headerOpacity = useSharedValue(0);
+  // Modal Control Overlays
+  const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [isSubmittingInactivation, setIsSubmittingInactivation] = useState(false);
 
-  useEffect(() => {
-    headerOpacity.value = withTiming(1, { duration: 380 });
-    (async () => {
-      const [p, a, c, n] = await Promise.all([
-        getUserProfile(),
-        getSavedAddresses(),
-        getSavedCards(),
-        getNotificationPreferences(),
-      ]);
-      setProfile(p);
-      setAddresses(a);
-      setCards(c);
-      setNotifPrefs(n);
-    })();
+  // Fetch settings when screen is viewed
+  const loadDatabaseSettings = useCallback(async () => {
+    try {
+      const authProfile = await getUserProfile();
+      const token = authProfile?.token || "";
+
+      const response = await fetch(`${API_BASE_URL}/api/user/settings`, {
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        setFullName(data.user.name || "");
+        setUsername(data.user.username || data.user.name || "U");
+        setEmail(data.user.email || "");
+        setPhone(data.user.phone || "");
+        setAccountType(data.user.account_type || "customer"); // <-- Map account type here dynamically from your backend query mapping
+        setProfilePicture(data.user.profile_picture || null);
+        
+        // This keeps the toggle state active when navigating away and back
+        setOrderNotifications(data.settings.order_notifications);
+        setNewProductsNotifications(data.settings.new_products);
+      }
+    } catch (err) {
+      console.error("Error fetching persistent setting properties:", err);
+    }
   }, []);
 
-  const headerStyle = useAnimatedStyle(() => ({ opacity: headerOpacity.value }));
-
-  const handleBack = useCallback(() => router.back(), []);
-  const handleNotifications = useCallback(() => router.push("/notifications" as never), []);
-
-  const handleSaveProfile = useCallback(
-    async (updated: UserProfile) => {
-      await saveUserProfile(updated);
-      setProfile(updated);
-      setShowEditProfile(false);
-      toastRef.current?.show({ message: "Profile Updated Successfully.", type: "success" });
-    },
-    []
+  useFocusEffect(
+    useCallback(() => {
+      loadDatabaseSettings();
+    }, [loadDatabaseSettings])
   );
 
-  const handleDeleteCard = useCallback(async (card: SavedCard) => {
-    const updated = await deleteSavedCard(card.id);
-    setCards(updated);
-    setDeleteCardTarget(null);
+  // Select a new picture from the device gallery
+  const handlePickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setProfilePicture(asset.uri);
+      if (asset.base64) {
+        setPendingPictureBase64(`data:image/jpeg;base64,${asset.base64}`);
+      }
+      setShouldRemovePicture(false);
+      setIsAvatarModalVisible(false);
+    }
+  };
+
+  // Remove the current profile picture
+  const handleRemoveImage = () => {
+    setProfilePicture(null);
+    setPendingPictureBase64(null);
+    setShouldRemovePicture(true);
+    setIsAvatarModalVisible(false);
+    toastRef.current?.show({ message: "Picture flagged for removal. Click update to save.", type: "success" });
+  };
+
+  // Send update profile changes to database
+  const handleUpdateProfile = useCallback(async () => {
+    if (!fullName.trim() || !email.trim()) {
+      toastRef.current?.show({ message: "Name and email cannot be empty.", type: "error" });
+      return;
+    }
+    setIsSavingProfile(true);
+    try {
+      const authProfile = await getUserProfile();
+      const token = authProfile?.token || "";
+
+      const response = await fetch(`${API_BASE_URL}/api/user/profile/update`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: fullName,
+          email,
+          phone,
+          profile_picture_base64: pendingPictureBase64,
+          remove_picture: shouldRemovePicture,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toastRef.current?.show({ message: data.message || "Profile updated successfully!", type: "success" });
+        setPendingPictureBase64(null);
+        setShouldRemovePicture(false);
+      } else {
+        toastRef.current?.show({ message: data.message || "Failed to update profile.", type: "error" });
+      }
+    } catch (err) {
+      toastRef.current?.show({ message: "Network connection error.", type: "error" });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }, [fullName, email, phone, pendingPictureBase64, shouldRemovePicture]);
+
+  // Handle setting updates when toggled
+  const handleToggleChange = useCallback(async (key: "order_notifications" | "new_products", value: boolean) => {
+    if (key === "order_notifications") setOrderNotifications(value);
+    if (key === "new_products") setNewProductsNotifications(value);
+
+    try {
+      const authProfile = await getUserProfile();
+      const token = authProfile?.token || "";
+
+      await fetch(`${API_BASE_URL}/api/user/settings/toggle`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ key, value: value ? 1 : 0 }),
+      });
+    } catch (err) {
+      console.error("Failed syncing notification preference toggle row:", err);
+    }
   }, []);
-
-  const handleSetDefaultCard = useCallback(async (id: string) => {
-    const updated = await setDefaultCard(id);
-    setCards(updated);
-  }, []);
-
-  const handleAddCard = useCallback(async (card: SavedCard) => {
-    const updated = await addSavedCard(card);
-    setCards(updated);
-    setShowAddCard(false);
-    toastRef.current?.show({ message: "Card added successfully.", type: "success" });
-  }, []);
-
-  const handleToggleNotif = useCallback(
-    async (key: keyof NotificationPreferences) => {
-      const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
-      setNotifPrefs(updated);
-      await saveNotificationPreferences(updated);
-    },
-    [notifPrefs]
-  );
-
-  const handleThemeChange = useCallback(
-    async (newMode: ThemeMode) => {
-      setMode(newMode);
-      await saveThemePreference(newMode);
-    },
-    [setMode]
-  );
 
   const handleSignOut = useCallback(async () => {
-    setShowSignOutConfirm(false);
-    toastRef.current?.show({ message: "Signed out successfully.", type: "success" });
-    setTimeout(() => router.replace("/(sign)/login"), 600);
-  }, []);
-
-  const handleDeleteAccount = useCallback(async () => {
+    try {
+      const authProfile = await getUserProfile();
+      const token = authProfile?.token || "";
+      await fetch(`${API_BASE_URL}/api/logout`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+    } catch (e) {}
     await deleteAllUserData();
-    setShowDeleteAccount(false);
-    router.replace("/(sign)/login");
+    router.replace({
+      pathname: "/login",
+      params: { signoutMessage: "You have successfully signed out." },
+    });
   }, []);
 
-  const initial = profile?.username ? profile.username.charAt(0).toUpperCase() : "?";
+  const handleRequestAccountInactivation = useCallback(async () => {
+    if (!deleteReason.trim()) {
+      toastRef.current?.show({ 
+        message: "Please specify a reason for deactivation.", 
+        type: "error" 
+      });
+      return;
+    }
+
+    setIsSubmittingInactivation(true);
+    try {
+      const authProfile = await getUserProfile();
+      const token = authProfile?.token || "";
+
+      const response = await fetch(`${API_BASE_URL}/api/user/inactivate-request`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: deleteReason }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setIsDeleteModalVisible(false);
+        setDeleteReason(""); 
+        
+        toastRef.current?.show({
+          message: "We have received your account deletion request.",
+          type: "success",
+        });
+      } else {
+        toastRef.current?.show({ 
+          message: data.message || "Failed to log deactivation query.", 
+          type: "error" 
+        });
+      }
+    } catch (err) {
+      toastRef.current?.show({ message: "Network connection error.", type: "error" });
+    } finally {
+      setIsSubmittingInactivation(false);
+    }
+  }, [deleteReason]);
+
+  const fallbackLetter = username ? username.charAt(0).toUpperCase() : fullName ? fullName.charAt(0).toUpperCase() : "U";
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.white }]} edges={["top"]}>
-      <Animated.View style={[styles.header, headerStyle]}>
-        <Pressable onPress={handleBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={22} color={colors.darkText} />
-          <Text style={[styles.backLabel, { color: colors.darkText }]}>Back</Text>
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.darkText }]}>Settings</Text>
-        <Pressable
-          onPress={handleNotifications}
-          style={[styles.iconButton, { backgroundColor: colors.inputBackground }]}
-        >
-          <Ionicons name="notifications-outline" size={18} color={colors.darkText} />
-        </Pressable>
-      </Animated.View>
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, { color: colors.darkText }]}>Settings Panel</Text>
+      </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-
-        {/* Profile Card */}
-        <SectionCard colors={colors} index={0}>
-          <View style={styles.profileRow}>
-            <View style={[styles.avatarCircle, { backgroundColor: colors.primaryBlue }]}>
-              <Text style={styles.avatarText}>{initial}</Text>
-            </View>
-            <View style={styles.profileInfo}>
-              <View style={styles.profileNameRow}>
-                <Text style={[styles.profileName, { color: colors.darkText }]}>
-                  {profile?.username ?? "—"}
-                </Text>
-                <View style={[styles.verifiedBadge, { backgroundColor: colors.success + "1A" }]}>
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-                  <Text style={[styles.verifiedText, { color: colors.success }]}>Verified</Text>
-                </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Profile Avatar Control Box */}
+        <View style={styles.avatarContainer}>
+          <Pressable onPress={() => setIsAvatarModalVisible(true)} style={styles.avatarPressable}>
+            {profilePicture ? (
+              <Image source={{ uri: profilePicture }} style={styles.avatarImage} />
+            ) : (
+              <View style={[styles.avatarFallback, { backgroundColor: colors.primaryBlue }]}>
+                <Text style={styles.avatarFallbackText}>{fallbackLetter}</Text>
               </View>
-              <Text style={[styles.profileMeta, { color: colors.grayText }]}>{profile?.email ?? "—"}</Text>
-              <Text style={[styles.profileMeta, { color: colors.grayText }]}>{profile?.phone ?? "—"}</Text>
+            )}
+            <View style={[styles.avatarEditBadge, { backgroundColor: colors.primaryBlue }]}>
+              <Ionicons name="camera" size={14} color="#FFF" />
             </View>
-          </View>
-          <Pressable
-            onPress={() => setShowEditProfile(true)}
-            style={[styles.editProfileButton, { backgroundColor: colors.primaryBlue }]}
-          >
-            <Ionicons name="pencil" size={15} color="#FFF" />
-            <Text style={styles.editProfileText}>Edit Profile</Text>
-          </Pressable>
-        </SectionCard>
-
-        {/* Payment Methods */}
-        <SectionTitle title="Payment Methods" colors={colors} />
-        <SectionCard colors={colors} index={1}>
-          <View style={[styles.cashRow, { backgroundColor: colors.lightBlue }]}>
-            <Ionicons name="cash-outline" size={20} color={colors.primaryBlue} />
-            <Text style={[styles.cashLabel, { color: colors.primaryBlue }]}>Cash on Delivery</Text>
-            <Text style={[styles.cashAlways, { color: colors.grayText }]}>Always available</Text>
-          </View>
-
-          {cards.map((card) => (
-            <CardRow
-              key={card.id}
-              card={card}
-              colors={colors}
-              onSetDefault={() => handleSetDefaultCard(card.id)}
-              onDelete={() => setDeleteCardTarget(card)}
-            />
-          ))}
-
-          <Pressable
-            onPress={() => setShowAddCard(true)}
-            style={[styles.addCardButton, { borderColor: colors.primaryBlue }]}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={colors.primaryBlue} />
-            <Text style={[styles.addCardText, { color: colors.primaryBlue }]}>Add New Card</Text>
-          </Pressable>
-        </SectionCard>
-
-        {/* Delivery Locations */}
-        <SectionTitle title="Delivery Locations" colors={colors} />
-        <SectionCard colors={colors} index={2}>
-          {addresses.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.grayText }]}>No saved addresses yet.</Text>
-          ) : (
-            addresses.map((address) => (
-              <AddressRow key={address.id} address={address} colors={colors} />
-            ))
-          )}
-          <Pressable
-            onPress={() => router.push("/routeSetup" as never)}
-            style={[styles.addCardButton, { borderColor: colors.primaryBlue }]}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={colors.primaryBlue} />
-            <Text style={[styles.addCardText, { color: colors.primaryBlue }]}>Add New Location</Text>
-          </Pressable>
-        </SectionCard>
-
-        {/* Distributor Card */}
-        <SectionTitle title="Business" colors={colors} />
-        <SectionCard colors={colors} index={3}>
-          <View style={styles.distributorRow}>
-            <View style={[styles.distributorIcon, { backgroundColor: colors.goldAccent + "1A" }]}>
-              <Ionicons name="business" size={22} color={colors.goldAccent} />
-            </View>
-            <View style={styles.distributorText}>
-              <Text style={[styles.distributorTitle, { color: colors.darkText }]}>
-                Become a Kayora Distributor
-              </Text>
-              <Text style={[styles.distributorSubtitle, { color: colors.grayText }]}>
-                Join our growing network and earn by supplying premium water.
-              </Text>
-            </View>
-          </View>
-          <Pressable
-            onPress={() => router.push("/contacts" as never)}
-            style={[styles.distributorButton, { backgroundColor: colors.goldAccent }]}
-          >
-            <Text style={styles.distributorButtonText}>Apply Now</Text>
-          </Pressable>
-        </SectionCard>
-
-        {/* App Settings */}
-        <SectionTitle title="App Settings" colors={colors} />
-        <SectionCard colors={colors} index={4}>
-          <Text style={[styles.settingsSubLabel, { color: colors.grayText }]}>Theme</Text>
-          <View style={styles.themeRow}>
-            {(["light", "dark", "system"] as ThemeMode[]).map((m) => (
-              <Pressable
-                key={m}
-                onPress={() => handleThemeChange(m)}
-                style={[
-                  styles.themeChip,
-                  {
-                    backgroundColor: mode === m ? colors.primaryBlue : colors.inputBackground,
-                    borderColor: mode === m ? colors.primaryBlue : colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.themeChipText, { color: mode === m ? "#FFF" : colors.grayText }]}>
-                  {m.charAt(0).toUpperCase() + m.slice(1)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          <Text style={[styles.settingsSubLabel, { color: colors.grayText }]}>Notifications</Text>
-          {(
-            [
-              { key: "orderNotifications", label: "Order Notifications" },
-              { key: "promotions", label: "Promotions" },
-              { key: "newProducts", label: "New Products" },
-              { key: "locationServices", label: "Location Services" },
-            ] as Array<{ key: keyof NotificationPreferences; label: string }>
-          ).map((item) => (
-            <View key={item.key} style={styles.toggleRow}>
-              <Text style={[styles.toggleLabel, { color: colors.darkText }]}>{item.label}</Text>
-              <Switch
-                value={notifPrefs[item.key]}
-                onValueChange={() => handleToggleNotif(item.key)}
-                trackColor={{ false: colors.border, true: colors.primaryBlue }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          ))}
-
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          {[
-            { label: "Language", value: "English", icon: "language-outline" },
-            { label: "Terms & Conditions", icon: "document-text-outline" },
-            { label: "Privacy Policy", icon: "shield-outline" },
-            { label: "Contact Support", icon: "headset-outline" },
-          ].map((item) => (
-            <Pressable key={item.label} style={styles.menuRow}>
-              <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={18} color={colors.grayText} />
-              <Text style={[styles.menuLabel, { color: colors.darkText }]}>{item.label}</Text>
-              <View style={styles.menuRight}>
-                {item.value && (
-                  <Text style={[styles.menuValue, { color: colors.grayText }]}>{item.value}</Text>
-                )}
-                <Ionicons name="chevron-forward" size={16} color={colors.grayText} />
-              </View>
-            </Pressable>
-          ))}
-
-          <View style={styles.versionRow}>
-            <Text style={[styles.versionText, { color: colors.grayText }]}>
-              Version {APP_VERSION}
-            </Text>
-          </View>
-        </SectionCard>
-
-        {/* Danger Zone */}
-        <SectionTitle title="Danger Zone" colors={colors} />
-        <View style={[styles.dangerCard, { borderColor: colors.error }]}>
-          <Pressable
-            onPress={() => setShowDeleteAccount(true)}
-            style={styles.dangerRow}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.error} />
-            <Text style={[styles.dangerLabel, { color: colors.error }]}>Delete Account</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.error} />
-          </Pressable>
-          <View style={[styles.divider, { backgroundColor: colors.error + "30" }]} />
-          <Pressable
-            onPress={() => setShowSignOutConfirm(true)}
-            style={styles.dangerRow}
-          >
-            <Ionicons name="log-out-outline" size={18} color={colors.error} />
-            <Text style={[styles.dangerLabel, { color: colors.error }]}>Sign Out</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.error} />
           </Pressable>
         </View>
 
-        <View style={{ height: 24 }} />
+        {/* Profile Fields Card */}
+        <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+          <Text style={[styles.sectionHeading, { color: colors.darkText }]}>Profile Information</Text>
+          
+          <Text style={[styles.inputLabel, { color: colors.grayText }]}>Full Name</Text>
+          <TextInput
+            value={fullName}
+            onChangeText={setFullName}
+            style={[styles.textField, { borderColor: colors.border, color: colors.darkText }]}
+          />
+          
+          <Text style={[styles.inputLabel, { color: colors.grayText }]}>Email Address</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={[styles.textField, { borderColor: colors.border, color: colors.darkText }]}
+          />
+          
+          <Text style={[styles.inputLabel, { color: colors.grayText }]}>Phone Line</Text>
+          <TextInput
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            style={[styles.textField, { borderColor: colors.border, color: colors.darkText }]}
+          />
+          
+          {/* 👑 DYNAMIC ACCOUNT LEVEL TIER ROW */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 14, padding: 12, borderRadius: 12, backgroundColor: colors.inputBackground || "#F5F5F5" }}>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.grayText }}>Account Level:</Text>
+            <Text style={{ fontSize: 13, fontWeight: "800", color: accountType === 'distributor' ? '#1E88E5' : colors.darkText }}>
+              {accountType === 'distributor' ? '👑 Premium Distributor' : 'Standard Account'}
+            </Text>
+          </View>
+          
+          <Pressable
+            onPress={handleUpdateProfile}
+            disabled={isSavingProfile}
+            style={[styles.primaryActionBtn, { backgroundColor: colors.primaryBlue }]}
+          >
+            {isSavingProfile ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <Text style={styles.actionBtnText}>Update Profile</Text>
+            )}
+          </Pressable>
+        </View>
+
+        {/* Notifications Section */}
+        <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+          <Text style={[styles.sectionHeading, { color: colors.darkText }]}>Notification Settings</Text>
+
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleTextContainer}>
+              <Text style={[styles.toggleTitle, { color: colors.darkText }]}>Order Notifications</Text>
+              <Text style={[styles.toggleSubtitle, { color: colors.grayText }]}>Alerts when dispatch is on the way</Text>
+            </View>
+            <Switch
+              value={orderNotifications}
+              onValueChange={(val) => handleToggleChange("order_notifications", val)}
+              trackColor={{ true: colors.primaryBlue }}
+            />
+          </View>
+
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleTextContainer}>
+              <Text style={[styles.toggleTitle, { color: colors.darkText }]}>New Products</Text>
+              <Text style={[styles.toggleSubtitle, { color: colors.grayText }]}>Get broadcast logs when new inventory arrives</Text>
+            </View>
+            <Switch
+              value={newProductsNotifications}
+              onValueChange={(val) => handleToggleChange("new_products", val)}
+              trackColor={{ true: colors.primaryBlue }}
+            />
+          </View>
+        </View>
+
+        {/* Administrative Action buttons */}
+        <Pressable
+          onPress={handleSignOut}
+          style={[styles.logoutRowBtn, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+        >
+          <Ionicons name="log-out-outline" size={20} color={colors.error} />
+          <Text style={[styles.logoutText, { color: colors.error }]}>Log Out of Account</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setIsDeleteModalVisible(true)}
+          style={[styles.logoutRowBtn, { backgroundColor: colors.cardBackground, borderColor: colors.border, marginTop: 10 }]}
+        >
+          <Ionicons name="trash-outline" size={20} color={colors.grayText} />
+          <Text style={[styles.logoutText, { color: colors.grayText }]}>Request Account Deletion</Text>
+        </Pressable>
       </ScrollView>
 
       <BottomTabBar activeTab="settings" colors={colors} />
 
-      {/* Edit Profile Modal */}
-      {profile && (
-        <EditProfileModal
-          visible={showEditProfile}
-          profile={profile}
-          colors={colors}
-          onClose={() => setShowEditProfile(false)}
-          onSave={handleSaveProfile}
-        />
-      )}
+      {/* Avatar Viewer Modal View */}
+      <Modal visible={isAvatarModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.white }]}>
+            <Text style={[styles.modalTitle, { color: colors.darkText, textAlign: 'center' }]}>Manage Profile Picture</Text>
+            <View style={styles.modalPreviewContainer}>
+              {profilePicture ? (
+                <Image source={{ uri: profilePicture }} style={styles.largePreviewImage} />
+              ) : (
+                <View style={[styles.largePreviewFallback, { backgroundColor: colors.primaryBlue }]}>
+                  <Text style={styles.largePreviewFallbackText}>{fallbackLetter}</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.verticalActionList}>
+              <Pressable onPress={handlePickImage} style={[styles.modalPrimaryAction, { backgroundColor: colors.primaryBlue }]}>
+                <Text style={styles.whiteBtnText}>Upload New Photo</Text>
+              </Pressable>
+              {profilePicture && (
+                <Pressable onPress={handleRemoveImage} style={[styles.modalPrimaryAction, { backgroundColor: colors.error, marginTop: 8 }]}>
+                  <Text style={styles.whiteBtnText}>Remove Photo</Text>
+                </Pressable>
+              )}
+              <Pressable onPress={() => setIsAvatarModalVisible(false)} style={[styles.cancelLinkBtn, { marginTop: 12 }]}>
+                <Text style={[styles.cancelLinkText, { color: colors.darkText }]}>Close Window</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
-      {/* Add Card Modal */}
-      <AddCardModal
-        visible={showAddCard}
-        colors={colors}
-        onClose={() => setShowAddCard(false)}
-        onAdd={handleAddCard}
-      />
-
-      {/* Delete Card Confirmation */}
-      <ConfirmModal
-        visible={deleteCardTarget !== null}
-        title={"Remove " + (deleteCardTarget?.maskedNumber ?? "") + "?"}
-        message="This card will be removed from your saved payment methods."
-        confirmLabel="Remove"
-        confirmDanger
-        colors={colors}
-        onCancel={() => setDeleteCardTarget(null)}
-        onConfirm={() => deleteCardTarget && handleDeleteCard(deleteCardTarget)}
-      />
-
-      {/* Sign Out Confirmation */}
-      <ConfirmModal
-        visible={showSignOutConfirm}
-        title="Sign Out"
-        message="Are you sure you want to sign out?"
-        confirmLabel="Sign Out"
-        confirmDanger
-        colors={colors}
-        onCancel={() => setShowSignOutConfirm(false)}
-        onConfirm={handleSignOut}
-      />
-
-      {/* Delete Account Modal */}
-      <DeleteAccountModal
-        visible={showDeleteAccount}
-        colors={colors}
-        onClose={() => setShowDeleteAccount(false)}
-        onDelete={handleDeleteAccount}
-      />
+      {/* Account Deletion / Inactivation Request Modal */}
+      <Modal visible={isDeleteModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalContainer}>
+            <View style={[styles.modalCard, { backgroundColor: colors.white }]}>
+              <Text style={[styles.modalTitle, { color: colors.darkText }]}>Request Inactivation</Text>
+              <Text style={[styles.modalDescription, { color: colors.grayText }]}>
+                Your request will be submitted to the administration team. Once approved, your status becomes inactive to prevent re-registration with this email.
+              </Text>
+              <TextInput
+                placeholder="Reason for requesting inactivation..."
+                placeholderTextColor={colors.grayText}
+                value={deleteReason}
+                onChangeText={setDeleteReason}
+                multiline
+                style={[styles.modalInput, { borderColor: colors.border, color: colors.darkText }]}
+              />
+              <View style={styles.modalActions}>
+                <Pressable
+                  onPress={() => setIsDeleteModalVisible(false)}
+                  style={[styles.modalBtn, { borderColor: colors.border, borderWidth: 1 }]}
+                >
+                  <Text style={[styles.modalBtnText, { color: colors.darkText }]}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleRequestAccountInactivation}
+                  disabled={isSubmittingInactivation}
+                  style={[styles.modalBtn, { backgroundColor: colors.error }]}
+                >
+                  <Text style={[styles.modalBtnText, { color: colors.white }]}>
+                    {isSubmittingInactivation ? "Sending..." : "Submit"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       <AnimatedToast ref={toastRef} />
     </SafeAreaView>
   );
 }
 
-// ---------------------------------------------------------------------------
-// SectionCard + SectionTitle helpers
-// ---------------------------------------------------------------------------
-
-function SectionTitle({ title, colors }: { title: string; colors: ThemeColors }) {
-  return (
-    <Text style={[styles.sectionTitle, { color: colors.grayText }]}>{title.toUpperCase()}</Text>
-  );
-}
-
-function SectionCard({
-  children,
-  colors,
-  index,
-}: {
-  children: React.ReactNode;
-  colors: ThemeColors;
-  index: number;
-}) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(14);
-
-  useEffect(() => {
-    const easing = ReanimatedEasing.out(ReanimatedEasing.cubic);
-    opacity.value = withDelay(index * 70, withTiming(1, { duration: 380 }));
-    translateY.value = withDelay(index * 70, withTiming(0, { duration: 380, easing }));
-  }, [index]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  return (
-    <Animated.View
-      style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }, animStyle]}
-    >
-      {children}
-    </Animated.View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// CardRow
-// ---------------------------------------------------------------------------
-
-function CardRow({
-  card,
-  colors,
-  onSetDefault,
-  onDelete,
-}: {
-  card: SavedCard;
-  colors: ThemeColors;
-  onSetDefault: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <View style={[styles.cardRow, { borderColor: colors.border }]}>
-      <View style={[styles.cardTypeIcon, { backgroundColor: colors.lightBlue }]}>
-        <Ionicons name="card-outline" size={18} color={colors.primaryBlue} />
-      </View>
-      <View style={styles.cardRowInfo}>
-        <Text style={[styles.cardBankName, { color: colors.darkText }]}>{card.bankName}</Text>
-        <Text style={[styles.cardMasked, { color: colors.grayText }]}>
-          {card.cardType} •••• {card.maskedNumber.slice(-4)} · {card.expiryDate}
-        </Text>
-        {card.isDefault && (
-          <View style={[styles.defaultBadge, { backgroundColor: colors.success + "1A" }]}>
-            <Text style={[styles.defaultBadgeText, { color: colors.success }]}>Default</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.cardRowActions}>
-        {!card.isDefault && (
-          <Pressable onPress={onSetDefault} hitSlop={8}>
-            <Ionicons name="star-outline" size={18} color={colors.primaryBlue} />
-          </Pressable>
-        )}
-        <Pressable onPress={onDelete} hitSlop={8}>
-          <Ionicons name="trash-outline" size={18} color={colors.error} />
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AddressRow
-// ---------------------------------------------------------------------------
-
-const ADDR_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  Home: "home", Work: "briefcase", School: "school",
-  Parents: "people", Shop: "storefront", Custom: "location",
-};
-
-function AddressRow({ address, colors }: { address: SavedAddress; colors: ThemeColors }) {
-  const label =
-    address.label === "Custom" && address.customLabel ? address.customLabel : address.label;
-  return (
-    <View style={[styles.addressRow, { borderColor: colors.border }]}>
-      <Ionicons name={ADDR_ICONS[address.label] ?? "location"} size={18} color={colors.primaryBlue} />
-      <View style={styles.addressInfo}>
-        <Text style={[styles.addressLabel, { color: colors.darkText }]}>{label}</Text>
-        <Text style={[styles.addressDetail, { color: colors.grayText }]} numberOfLines={1}>
-          {address.address}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// EditProfileModal
-// ---------------------------------------------------------------------------
-
-function EditProfileModal({
-  visible,
-  profile,
-  colors,
-  onClose,
-  onSave,
-}: {
-  visible: boolean;
-  profile: UserProfile;
-  colors: ThemeColors;
-  onClose: () => void;
-  onSave: (p: UserProfile) => Promise<void>;
-}) {
-  const [username, setUsername] = useState(profile.username);
-  const [email, setEmail] = useState(profile.email);
-  const [isSaving, setIsSaving] = useState(false);
-  const [emailNote, setEmailNote] = useState(false);
-
-  const handleSave = useCallback(async () => {
-    setIsSaving(true);
-    await onSave({ ...profile, username, email });
-    setIsSaving(false);
-  }, [profile, username, email, onSave]);
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.modalRoot, { backgroundColor: colors.white }]} edges={["top", "bottom"]}>
-        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Ionicons name="close" size={24} color={colors.darkText} />
-          </Pressable>
-          <Text style={[styles.modalTitle, { color: colors.darkText }]}>Edit Profile</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
-            <SettingsInput label="Username" value={username} onChangeText={setUsername} colors={colors} />
-            <SettingsInput
-              label="Email Address"
-              value={email}
-              onChangeText={(v) => { setEmail(v); setEmailNote(true); }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              colors={colors}
-            />
-            {emailNote && (
-              <Text style={[styles.emailNote, { color: colors.grayText }]}>
-                Verification email will be required when the backend is connected.
-              </Text>
-            )}
-            <SettingsInput
-              label="Phone Number (cannot be edited)"
-              value={profile.phone}
-              onChangeText={() => {}}
-              editable={false}
-              colors={colors}
-            />
-            <Pressable
-              onPress={handleSave}
-              disabled={isSaving}
-              style={[styles.saveButton, { backgroundColor: colors.primaryBlue }]}
-            >
-              <Text style={styles.saveButtonText}>{isSaving ? "Saving..." : "Save Changes"}</Text>
-            </Pressable>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AddCardModal
-// ---------------------------------------------------------------------------
-
-function AddCardModal({
-  visible,
-  colors,
-  onClose,
-  onAdd,
-}: {
-  visible: boolean;
-  colors: ThemeColors;
-  onClose: () => void;
-  onAdd: (card: SavedCard) => Promise<void>;
-}) {
-  const [bankName, setBankName] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cardType, setCardType] = useState<SavedCard["cardType"]>("Visa");
-  const [isDefault, setIsDefault] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const formatCardNumber = (text: string) => {
-    const digits = text.replace(/\D/g, "").slice(0, 16);
-    return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
-  };
-
-  const formatExpiry = (text: string) => {
-    const digits = text.replace(/\D/g, "").slice(0, 4);
-    return digits.length > 2 ? digits.slice(0, 2) + "/" + digits.slice(2) : digits;
-  };
-
-  const handleAdd = useCallback(async () => {
-    if (!bankName || cardNumber.replace(/\s/g, "").length < 16 || expiry.length < 5) return;
-    setIsSaving(true);
-    await onAdd({
-      id: "card_" + Date.now(),
-      bankName,
-      maskedNumber: cardNumber,
-      expiryDate: expiry,
-      cardType,
-      isDefault,
-    });
-    setBankName(""); setCardNumber(""); setExpiry(""); setIsDefault(false);
-    setIsSaving(false);
-  }, [bankName, cardNumber, expiry, cardType, isDefault, onAdd]);
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.modalRoot, { backgroundColor: colors.white }]} edges={["top", "bottom"]}>
-        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-          <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={24} color={colors.darkText} /></Pressable>
-          <Text style={[styles.modalTitle, { color: colors.darkText }]}>Add New Card</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
-            <SettingsInput label="Bank Name" value={bankName} onChangeText={setBankName} colors={colors} />
-            <SettingsInput
-              label="Card Number"
-              value={cardNumber}
-              onChangeText={(v) => setCardNumber(formatCardNumber(v))}
-              keyboardType="number-pad"
-              colors={colors}
-            />
-            <SettingsInput
-              label="Expiry (MM/YY)"
-              value={expiry}
-              onChangeText={(v) => setExpiry(formatExpiry(v))}
-              keyboardType="number-pad"
-              colors={colors}
-            />
-            <Text style={[styles.fieldLabel, { color: colors.grayText }]}>Card Type</Text>
-            <View style={styles.cardTypeRow}>
-              {(["Visa", "Mastercard", "Verve", "Other"] as SavedCard["cardType"][]).map((t) => (
-                <Pressable
-                  key={t}
-                  onPress={() => setCardType(t)}
-                  style={[styles.cardTypeChip, {
-                    backgroundColor: cardType === t ? colors.primaryBlue : colors.inputBackground,
-                    borderColor: cardType === t ? colors.primaryBlue : colors.border,
-                  }]}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: cardType === t ? "#FFF" : colors.grayText }}>{t}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable onPress={() => setIsDefault((p) => !p)} style={styles.defaultToggleRow}>
-              <Ionicons name={isDefault ? "checkbox" : "square-outline"} size={22} color={colors.primaryBlue} />
-              <Text style={[styles.toggleLabel, { color: colors.darkText }]}>Set as default card</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleAdd}
-              disabled={isSaving}
-              style={[styles.saveButton, { backgroundColor: colors.primaryBlue }]}
-            >
-              <Text style={styles.saveButtonText}>{isSaving ? "Adding..." : "Add Card"}</Text>
-            </Pressable>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// DeleteAccountModal
-// ---------------------------------------------------------------------------
-
-function DeleteAccountModal({
-  visible,
-  colors,
-  onClose,
-  onDelete,
-}: {
-  visible: boolean;
-  colors: ThemeColors;
-  onClose: () => void;
-  onDelete: () => Promise<void>;
-}) {
-  const [selectedReason, setSelectedReason] = useState<string | null>(null);
-  const [otherText, setOtherText] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const canDelete = selectedReason !== null && (selectedReason !== "Other" || otherText.trim().length > 0);
-
-  const handleDelete = useCallback(async () => {
-    setIsDeleting(true);
-    await onDelete();
-  }, [onDelete]);
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={[styles.modalRoot, { backgroundColor: colors.white }]} edges={["top", "bottom"]}>
-        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-          <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={24} color={colors.darkText} /></Pressable>
-          <Text style={[styles.modalTitle, { color: colors.error }]}>Delete Account</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <ScrollView contentContainerStyle={styles.modalScroll}>
-          <Text style={[styles.deleteHeading, { color: colors.darkText }]}>We're sorry to see you go.</Text>
-          <Text style={[styles.deleteSubtitle, { color: colors.grayText }]}>
-            Why are you deleting your account?
-          </Text>
-
-          {DELETE_REASONS.map((reason) => (
-            <Pressable
-              key={reason}
-              onPress={() => setSelectedReason(reason)}
-              style={[styles.reasonRow, { borderColor: selectedReason === reason ? colors.error : colors.border }]}
-            >
-              <Ionicons
-                name={selectedReason === reason ? "radio-button-on" : "radio-button-off"}
-                size={20}
-                color={selectedReason === reason ? colors.error : colors.grayText}
-              />
-              <Text style={[styles.reasonText, { color: colors.darkText }]}>{reason}</Text>
-            </Pressable>
-          ))}
-
-          {selectedReason === "Other" && (
-            <TextInput
-              value={otherText}
-              onChangeText={setOtherText}
-              placeholder="Please describe your reason..."
-              placeholderTextColor={colors.placeholder}
-              multiline
-              numberOfLines={4}
-              style={[styles.textArea, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.darkText }]}
-            />
-          )}
-
-          <Text style={[styles.warningText, { color: colors.error }]}>
-            This action cannot be undone.
-          </Text>
-
-          <View style={styles.deleteButtonsRow}>
-            <Pressable onPress={onClose} style={[styles.cancelButton, { borderColor: colors.border }]}>
-              <Text style={[styles.cancelButtonText, { color: colors.darkText }]}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleDelete}
-              disabled={!canDelete || isDeleting}
-              style={[styles.deleteButton, { backgroundColor: canDelete ? colors.error : colors.grayText }]}
-            >
-              <Text style={styles.deleteButtonText}>
-                {isDeleting ? "Deleting..." : "Delete My Account"}
-              </Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// ConfirmModal
-// ---------------------------------------------------------------------------
-
-function ConfirmModal({
-  visible,
-  title,
-  message,
-  confirmLabel,
-  confirmDanger,
-  colors,
-  onCancel,
-  onConfirm,
-}: {
-  visible: boolean;
-  title: string;
-  message: string;
-  confirmLabel: string;
-  confirmDanger?: boolean;
-  colors: ThemeColors;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={[styles.confirmOverlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.confirmCard, { backgroundColor: colors.white }]}>
-          <Text style={[styles.confirmTitle, { color: colors.darkText }]}>{title}</Text>
-          <Text style={[styles.confirmMessage, { color: colors.grayText }]}>{message}</Text>
-          <View style={styles.deleteButtonsRow}>
-            <Pressable onPress={onCancel} style={[styles.cancelButton, { borderColor: colors.border }]}>
-              <Text style={[styles.cancelButtonText, { color: colors.darkText }]}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={onConfirm}
-              style={[styles.deleteButton, { backgroundColor: confirmDanger ? colors.error : colors.primaryBlue }]}
-            >
-              <Text style={styles.deleteButtonText}>{confirmLabel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// SettingsInput helper
-// ---------------------------------------------------------------------------
-
-function SettingsInput({
-  label,
-  value,
-  onChangeText,
-  keyboardType,
-  autoCapitalize,
-  editable = true,
-  colors,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  keyboardType?: "default" | "email-address" | "phone-pad" | "number-pad";
-  autoCapitalize?: "none" | "sentences";
-  editable?: boolean;
-  colors: ThemeColors;
-}) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <View style={styles.inputWrapper}>
-      <Text style={[styles.fieldLabel, { color: colors.grayText }]}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType ?? "default"}
-        autoCapitalize={autoCapitalize ?? "sentences"}
-        autoCorrect={false}
-        editable={editable}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.textInput,
-          {
-            backgroundColor: editable ? colors.inputBackground : colors.border,
-            borderColor: focused ? colors.primaryBlue : colors.border,
-            color: colors.darkText,
-          },
-        ]}
-      />
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  backButton: { flexDirection: "row", alignItems: "center", gap: 2, minWidth: 64 },
-  backLabel: { fontSize: 15, fontWeight: "600" },
-  headerTitle: { fontSize: 17, fontWeight: "800" },
-  iconButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  scroll: { paddingHorizontal: 20, paddingTop: 8 },
-  sectionTitle: { fontSize: 11, fontWeight: "700", letterSpacing: 1, marginTop: 20, marginBottom: 8 },
-  sectionCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 4,
-    shadowColor: "#0D4A8C",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  profileRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 14 },
-  avatarCircle: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 24, fontWeight: "800", color: "#FFF" },
-  profileInfo: { flex: 1 },
-  profileNameRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  profileName: { fontSize: 16, fontWeight: "800" },
-  verifiedBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
-  verifiedText: { fontSize: 10, fontWeight: "700" },
-  profileMeta: { fontSize: 12, marginTop: 2 },
-  editProfileButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 42, borderRadius: 12 },
-  editProfileText: { fontSize: 14, fontWeight: "700", color: "#FFF" },
-  cashRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, marginBottom: 10 },
-  cashLabel: { flex: 1, fontSize: 14, fontWeight: "700" },
-  cashAlways: { fontSize: 11 },
-  cardRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1 },
-  cardTypeIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  cardRowInfo: { flex: 1 },
-  cardBankName: { fontSize: 14, fontWeight: "700" },
-  cardMasked: { fontSize: 12, marginTop: 2 },
-  defaultBadge: { alignSelf: "flex-start", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 4 },
-  defaultBadgeText: { fontSize: 10, fontWeight: "700" },
-  cardRowActions: { flexDirection: "row", gap: 12 },
-  addCardButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 12, borderWidth: 1.5, marginTop: 10 },
-  addCardText: { fontSize: 14, fontWeight: "700" },
-  addressRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderTopWidth: 1 },
-  addressInfo: { flex: 1 },
-  addressLabel: { fontSize: 14, fontWeight: "700" },
-  addressDetail: { fontSize: 12, marginTop: 1 },
-  distributorRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 14 },
-  distributorIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  distributorText: { flex: 1 },
-  distributorTitle: { fontSize: 14, fontWeight: "800", marginBottom: 4 },
-  distributorSubtitle: { fontSize: 12, lineHeight: 18 },
-  distributorButton: { height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  distributorButtonText: { fontSize: 14, fontWeight: "800", color: "#FFF" },
-  settingsSubLabel: { fontSize: 12, fontWeight: "700", marginBottom: 10 },
-  themeRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
-  themeChip: { flex: 1, height: 38, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  themeChipText: { fontSize: 12, fontWeight: "700" },
-  divider: { height: 1, marginVertical: 14 },
-  toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 },
-  toggleLabel: { fontSize: 14, fontWeight: "600" },
-  menuRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-  menuLabel: { flex: 1, fontSize: 14, fontWeight: "600" },
-  menuRight: { flexDirection: "row", alignItems: "center", gap: 6 },
-  menuValue: { fontSize: 13 },
-  versionRow: { alignItems: "center", paddingTop: 8 },
-  versionText: { fontSize: 12 },
-  dangerCard: { borderWidth: 1.5, borderRadius: 16, marginBottom: 4, overflow: "hidden" },
-  dangerRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
-  dangerLabel: { flex: 1, fontSize: 14, fontWeight: "700" },
-  modalRoot: { flex: 1 },
-  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
-  modalTitle: { fontSize: 16, fontWeight: "800" },
-  modalScroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
-  inputWrapper: { marginBottom: 16 },
-  fieldLabel: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
-  textInput: { height: 50, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, fontSize: 15 },
-  emailNote: { fontSize: 12, marginTop: -8, marginBottom: 16, lineHeight: 18 },
-  saveButton: { height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", marginTop: 8 },
-  saveButtonText: { fontSize: 16, fontWeight: "800", color: "#FFF" },
-  cardTypeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  cardTypeChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5 },
-  defaultToggleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 20 },
-  deleteHeading: { fontSize: 20, fontWeight: "800", marginBottom: 6 },
-  deleteSubtitle: { fontSize: 14, marginBottom: 16 },
-  reasonRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1.5, marginBottom: 8 },
-  reasonText: { flex: 1, fontSize: 14 },
-  textArea: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingTop: 12, fontSize: 14, minHeight: 100, textAlignVertical: "top", marginTop: 8, marginBottom: 16 },
-  warningText: { fontSize: 13, fontWeight: "700", textAlign: "center", marginBottom: 20 },
-  deleteButtonsRow: { flexDirection: "row", gap: 12 },
-  cancelButton: { flex: 1, height: 50, borderRadius: 25, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  cancelButtonText: { fontSize: 14, fontWeight: "700" },
-  deleteButton: { flex: 1, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center" },
-  deleteButtonText: { fontSize: 14, fontWeight: "700", color: "#FFF" },
-  confirmOverlay: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 },
-  confirmCard: { width: "100%", borderRadius: 20, padding: 24 },
-  confirmTitle: { fontSize: 17, fontWeight: "800", marginBottom: 8 },
-  confirmMessage: { fontSize: 14, lineHeight: 20, marginBottom: 20 },
-  emptyText: { fontSize: 13, textAlign: "center", paddingVertical: 8 },
+  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+  headerTitle: { fontSize: 22, fontWeight: "800" },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 100 },
+  avatarContainer: { alignItems: "center", marginVertical: 20 },
+  avatarPressable: { position: "relative" },
+  avatarImage: { width: 100, height: 100, borderRadius: 50 },
+  avatarFallback: { width: 100, height: 100, borderRadius: 50, justifyContent: "center", alignItems: "center" },
+  avatarFallbackText: { color: "#FFF", fontSize: 36, fontWeight: "800" },
+  avatarEditBadge: { position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFF" },
+  sectionCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 14 },
+  sectionHeading: { fontSize: 15, fontWeight: "800", marginBottom: 14 },
+  inputLabel: { fontSize: 12, fontWeight: "600", marginBottom: 4, marginTop: 10 },
+  textField: { height: 48, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, fontSize: 14 },
+  primaryActionBtn: { height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 18 },
+  actionBtnText: { fontSize: 14, fontWeight: "700", color: "#FFFFFF" },
+  toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 },
+  toggleTextContainer: { flex: 1, paddingRight: 16 },
+  toggleTitle: { fontSize: 14, fontWeight: "700" },
+  toggleSubtitle: { fontSize: 11, marginTop: 2 },
+  logoutRowBtn: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 16, borderWidth: 1, padding: 16 },
+  logoutText: { fontSize: 14, fontWeight: "700" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 },
+  modalContainer: { width: "100%", alignItems: "center" },
+  modalCard: { width: "100%", borderRadius: 20, padding: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 },
+  modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 16 },
+  modalPreviewContainer: { alignItems: "center", marginBottom: 20 },
+  largePreviewImage: { width: 160, height: 160, borderRadius: 80 },
+  largePreviewFallback: { width: 160, height: 160, borderRadius: 80, justifyContent: "center", alignItems: "center" },
+  largePreviewFallbackText: { color: "#FFF", fontSize: 54, fontWeight: "800" },
+  verticalActionList: { width: '100%' },
+  modalPrimaryAction: { height: 46, borderRadius: 23, justifyContent: "center", alignItems: "center" },
+  whiteBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
+  cancelLinkBtn: { padding: 10, alignItems: "center" },
+  cancelLinkText: { fontWeight: "700", fontSize: 14 },
+  modalDescription: { fontSize: 13, lineHeight: 18, marginBottom: 14 },
+  modalInput: { height: 80, borderRadius: 12, borderWidth: 1.5, padding: 12, textAlignVertical: "top", fontSize: 14, marginBottom: 18 },
+  modalActions: { flexDirection: "row", gap: 12 },
+  modalBtn: { flex: 1, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  modalBtnText: { fontSize: 14, fontWeight: "700" },
 });
