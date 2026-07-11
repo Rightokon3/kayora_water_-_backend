@@ -158,6 +158,11 @@ export default function ProductDetail() {
   const cartScale = useSharedValue(1);
   const bulkScale = useSharedValue(1);
 
+  // These MUST run on every render, before any early return below,
+  // or React throws "Rendered more hooks than during the previous render."
+  const cartAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: cartScale.value }] }));
+  const bulkAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: bulkScale.value }] }));
+
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setToastVisible(true);
@@ -258,14 +263,6 @@ export default function ProductDetail() {
     );
   }
 
-if (loading) {
-    return (
-      <View style={[styles.loaderContainer, { backgroundColor: bg }]}>
-        <ActivityIndicator size="large" color={C.primaryBlue} />
-      </View>
-    );
-  }
-
   // ─── EMPTY STATE TRIGGER ───
   if (!product) {
     return (
@@ -331,7 +328,7 @@ if (loading) {
             <Text style={styles.heroTitle}>Kayora {product.size}{'\n'}{product.name}</Text>
             <Text style={styles.heroDesc}>{product.heroDesc}</Text>
 
-            <Animated.View style={[useAnimatedStyle(() => ({ transform: [{ scale: cartScale.value }] })), { marginTop: 24 }]}>
+            <Animated.View style={[cartAnimatedStyle, { marginTop: 24 }]}>
               <Pressable
                 onPressIn={() => { cartScale.value = withSpring(0.96); }}
                 onPressOut={() => { cartScale.value = withSpring(1); }}
@@ -343,7 +340,7 @@ if (loading) {
               </Pressable>
             </Animated.View>
 
-            <Animated.View style={[useAnimatedStyle(() => ({ transform: [{ scale: bulkScale.value }] })), { marginTop: 12, marginBottom: 28 }]}>
+            <Animated.View style={[bulkAnimatedStyle, { marginTop: 12, marginBottom: 28 }]}>
               <Pressable
                 onPressIn={() => { bulkScale.value = withSpring(0.96); }}
                 onPressOut={() => { bulkScale.value = withSpring(1); }}

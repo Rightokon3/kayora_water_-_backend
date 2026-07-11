@@ -595,8 +595,8 @@ function OrderDetailsModal({ order, colors, onClose, onOrderAgain }: { order: Or
           </DetailsSection>
 
           <DetailsSection title="Products Ordered" colors={colors}>
-            {order.products?.map((product) => (
-              <ProductLineItem key={product.productId} product={product} colors={colors} />
+            {order.products?.map((product, index) => (
+              <ProductLineItem key={`${product.name}-${index}`} product={product} colors={colors} />
             ))}
           </DetailsSection>
 

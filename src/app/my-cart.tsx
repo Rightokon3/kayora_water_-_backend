@@ -259,7 +259,7 @@ export default function MyCartScreen() {
           "Accept": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ productId, quantity: currentQuantity + 1 })
+        body: JSON.stringify({ product_id: productId, quantity: currentQuantity + 1 })
       });
 
       const json = await response.json();
@@ -287,7 +287,7 @@ export default function MyCartScreen() {
           "Accept": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ productId: product.id, quantity: currentQuantity - 1 })
+        body: JSON.stringify({ product_id: product.id, quantity: currentQuantity - 1 })
       });
 
       const json = await response.json();
@@ -305,14 +305,12 @@ export default function MyCartScreen() {
       const userProfile = await getUserProfile();
       const token = userProfile?.token || "";
 
-      const response = await fetch(`${API_BASE_URL}/api/cart/remove`, {
-        method: "POST",
+      const response = await fetch(`${API_BASE_URL}/api/cart/remove/${removeTarget.id}`, {
+        method: "DELETE",
         headers: {
-          "Content-Type": "application/json",
           "Accept": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ productId: removeTarget.id })
       });
 
       const json = await response.json();
@@ -1194,9 +1192,112 @@ function EmptyCart({ colors, onStartShopping }: { colors: ThemeColors; onStartSh
   );
 }
 
-function WebDateTimeFallback({ visible, mode, colors, initialDate, onClose, onConfirm }: any) {
-  return null;
+function WebDateTimeFallback({
+  visible,
+  mode,
+  colors,
+  initialDate,
+  onClose,
+  onConfirm,
+}: {
+  visible: boolean;
+  mode: "date" | "time";
+  colors: ThemeColors;
+  initialDate: Date;
+  onClose: () => void;
+  onConfirm: (date: Date) => void;
+}) {
+  const [dateValue, setDateValue] = useState(() => toDateInputValue(initialDate));
+  const [timeValue, setTimeValue] = useState(() => toTimeInputValue(initialDate));
+
+  useEffect(() => {
+    setDateValue(toDateInputValue(initialDate));
+    setTimeValue(toTimeInputValue(initialDate));
+  }, [initialDate, visible]);
+
+  const handleConfirm = () => {
+    const [year, month, day] = dateValue.split("-").map(Number);
+    const [hours, minutes] = timeValue.split(":").map(Number);
+    const updated = new Date(initialDate);
+    if (mode === "date") {
+      updated.setFullYear(year, month - 1, day);
+    } else {
+      updated.setHours(hours, minutes, 0, 0);
+    }
+    onConfirm(updated);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={[webPickerStyles.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[webPickerStyles.card, { backgroundColor: colors.white }]}>
+          <Text style={[webPickerStyles.title, { color: colors.darkText }]}>
+            {mode === "date" ? "Select Delivery Date" : "Select Delivery Time"}
+          </Text>
+
+          {mode === "date" ? (
+            <input
+              type="date"
+              value={dateValue}
+              min={toDateInputValue(new Date())}
+              onChange={(e) => setDateValue(e.target.value)}
+              style={webInputStyle}
+            />
+          ) : (
+            <input
+              type="time"
+              value={timeValue}
+              onChange={(e) => setTimeValue(e.target.value)}
+              style={webInputStyle}
+            />
+          )}
+
+          <View style={webPickerStyles.buttonsRow}>
+            <Pressable onPress={onClose} style={[webPickerStyles.cancelButton, { borderColor: colors.border }]}>
+              <Text style={[webPickerStyles.cancelText, { color: colors.darkText }]}>Cancel</Text>
+            </Pressable>
+            <Pressable onPress={handleConfirm} style={[webPickerStyles.confirmButton, { backgroundColor: colors.primaryBlue }]}>
+              <Text style={webPickerStyles.confirmText}>Confirm</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 }
+
+function toDateInputValue(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function toTimeInputValue(date: Date): string {
+  const h = String(date.getHours()).padStart(2, "0");
+  const m = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+const webInputStyle: React.CSSProperties = {
+  fontSize: 16,
+  padding: 12,
+  borderRadius: 8,
+  border: "1px solid #E5E7EB",
+  marginBottom: 20,
+  width: "100%",
+};
+
+const webPickerStyles = StyleSheet.create({
+  overlay: { flex: 1, alignItems: "center", justifyContent: "center" },
+  card: { width: 320, padding: 24, borderRadius: 16 },
+  title: { fontSize: 16, fontWeight: "700", marginBottom: 16 },
+  buttonsRow: { flexDirection: "row", gap: 10, marginTop: 4 },
+  cancelButton: { flex: 1, height: 44, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  cancelText: { fontSize: 14, fontWeight: "600" },
+  confirmButton: { flex: 1, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  confirmText: { fontSize: 14, fontWeight: "700", color: "#FFFFFF" },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
