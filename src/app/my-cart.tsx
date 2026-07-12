@@ -88,6 +88,19 @@ const DELIVERY_FEE = 500;
 const SERVICE_FEE = 100;
 const DISCOUNT = 0;
 
+// ─── BUSINESS HOURS: drivers work 7:00 AM – 5:00 PM ───
+const BUSINESS_HOURS_START = 7;  // 7:00 AM
+const BUSINESS_HOURS_END = 17;   // 5:00 PM (24hr clock)
+
+function isWithinBusinessHours(date: Date): boolean {
+  const hour = date.getHours();
+  return hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END;
+}
+
+function formatBusinessHoursLabel(): string {
+  return "7:00 AM – 5:00 PM";
+}
+
 type CartLine = {
   product: Product;
   quantity: number;
@@ -190,6 +203,7 @@ export default function MyCartScreen() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastOrder, setLastOrder] = useState<Order | null>(null);
+  const [showOffDutyModal, setShowOffDutyModal] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -379,6 +393,16 @@ export default function MyCartScreen() {
   }, [cartLines.length, selectedAddressId, paymentMethod, cardNumber, cardExpiry, cardCvv, cardHolder]);
 
   const handlePlaceOrder = useCallback(async () => {
+    // ─── BUSINESS HOURS CHECK ───
+    // ASAP orders are checked against the current time. Scheduled orders
+    // are checked against the time the customer picked, since drivers
+    // won't be available to fulfill a delivery scheduled for, say, 9 PM.
+    const timeToCheck = deliveryTiming === "asap" ? new Date() : scheduledDate;
+    if (!isWithinBusinessHours(timeToCheck)) {
+      setShowOffDutyModal(true);
+      return;
+    }
+
     const validationError = validateOrder();
     if (validationError) {
       toastRef.current?.show({ message: validationError, type: "error" });
@@ -585,6 +609,12 @@ export default function MyCartScreen() {
           }}
         />
       )}
+
+      <OffDutyModal
+        visible={showOffDutyModal}
+        colors={colors}
+        onClose={() => setShowOffDutyModal(false)}
+      />
 
       <RemoveConfirmationModal
         product={removeTarget}
@@ -1112,6 +1142,30 @@ function PlaceOrderButton({ colors, loading, onPress, }: { colors: ThemeColors; 
         <Text style={styles.placeOrderText}>{loading ? "Placing Order..." : "Place Order"}</Text>
       </Pressable>
     </Animated.View>
+  );
+}
+
+function OffDutyModal({ visible, colors, onClose }: { visible: boolean; colors: ThemeColors; onClose: () => void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+        <View style={[styles.confirmModalCard, { backgroundColor: colors.white }]}>
+          <View style={[styles.confirmIconCircle, { backgroundColor: "#F59E0B1A" }]}>
+            <Ionicons name="moon-outline" size={26} color="#F59E0B" />
+          </View>
+          <Text style={[styles.confirmTitle, { color: colors.darkText }]}>Our Drivers Are Off Duty</Text>
+          <Text style={[styles.confirmSubtitle, { color: colors.grayText }]}>
+            {"We're open daily from " + formatBusinessHoursLabel() + ". Please place your order during these hours, or choose a delivery time that falls within them."}
+          </Text>
+          <Pressable
+            onPress={onClose}
+            style={[styles.confirmRemoveButton, { backgroundColor: colors.primaryBlue, width: "100%" }]}
+          >
+            <Text style={styles.confirmRemoveText}>Got It</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
