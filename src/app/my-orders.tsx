@@ -600,7 +600,7 @@ function OrderDetailsModal({ order, colors, onClose, onOrderAgain }: { order: Or
             ))}
           </DetailsSection>
 
-          <DetailsSection title="Rider Information" colors={colors}>
+          <DetailsSection title="Driver Information" colors={colors}>
             {order.rider ? (
               <RiderSummaryRow rider={order.rider} order={order} colors={colors} />
             ) : (
@@ -707,7 +707,7 @@ function UnassignedRiderPlaceholder({ colors }: { colors: ThemeColors }) {
   return (
     <View style={styles.unassignedPlaceholder}>
       <Ionicons name="time-outline" size={32} color={colors.grayText} />
-      <Text style={[styles.unassignedText, { color: colors.grayText }]}>Rider assignment processing...</Text>
+      <Text style={[styles.unassignedText, { color: colors.grayText }]}>Driver assignment processing...</Text>
     </View>
   );
 }

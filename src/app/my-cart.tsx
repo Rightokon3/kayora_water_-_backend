@@ -43,6 +43,15 @@ export type CartItem = {
 
 export type PaymentMethod = "cash" | "card";
 
+export type NearbyDriver = {
+  id: number;
+  fullName: string;
+  vehicle: string;
+  plateNumber?: string;
+  distanceKm: number;
+  etaMinutes: number;
+};
+
 export type OrderTimeline = {
   key: string;
   label: string;
@@ -89,10 +98,16 @@ const SERVICE_FEE = 100;
 const DISCOUNT = 0;
 
 // ─── BUSINESS HOURS: drivers work 7:00 AM – 5:00 PM ───
+// TEMPORARY TESTING SWITCH: set to false to bypass the off-duty check
+// while testing the new driver-selection feature. Set back to true
+// before shipping — this is the ONLY line that needs to change.
+const BUSINESS_HOURS_ENFORCED = true;
+
 const BUSINESS_HOURS_START = 7;  // 7:00 AM
 const BUSINESS_HOURS_END = 17;   // 5:00 PM (24hr clock)
 
 function isWithinBusinessHours(date: Date): boolean {
+  if (!BUSINESS_HOURS_ENFORCED) return true;
   const hour = date.getHours();
   return hour >= BUSINESS_HOURS_START && hour < BUSINESS_HOURS_END;
 }
@@ -204,6 +219,12 @@ export default function MyCartScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastOrder, setLastOrder] = useState<Order | null>(null);
   const [showOffDutyModal, setShowOffDutyModal] = useState(false);
+
+  // ─── ASAP DRIVER SELECTION (customer picks the driver directly,
+  // instead of the order being broadcast to every online driver) ───
+  const [nearbyDrivers, setNearbyDrivers] = useState<NearbyDriver[]>([]);
+  const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
+  const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -341,6 +362,54 @@ export default function MyCartScreen() {
     setRemoveTarget(null);
   }, []);
 
+  const loadNearbyDrivers = useCallback(async (latitude: number, longitude: number) => {
+    setIsLoadingDrivers(true);
+    setSelectedDriverId(null);
+    try {
+      const userProfile = await getUserProfile();
+      const token = userProfile?.token || "";
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/drivers/nearby?latitude=${latitude}&longitude=${longitude}`,
+        {
+          headers: { "Accept": "application/json", "Authorization": `Bearer ${token}` },
+        }
+      );
+      const json = await response.json();
+      if (response.ok) {
+        setNearbyDrivers(json.drivers || []);
+      } else {
+        setNearbyDrivers([]);
+      }
+    } catch (err) {
+      console.error("Failed to load nearby drivers:", err);
+      setNearbyDrivers([]);
+    } finally {
+      setIsLoadingDrivers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (deliveryTiming !== "asap") {
+      return;
+    }
+    const address = addresses.find((a) => a.id === selectedAddressId);
+    if (address) {
+      loadNearbyDrivers(address.latitude, address.longitude);
+    } else {
+      setNearbyDrivers([]);
+      setSelectedDriverId(null);
+    }
+  }, [deliveryTiming, selectedAddressId, addresses, loadNearbyDrivers]);
+
+  const handleSelectTiming = useCallback((timing: DeliveryTimingOption) => {
+    setDeliveryTiming(timing);
+    if (timing === "scheduled") {
+      setNearbyDrivers([]);
+      setSelectedDriverId(null);
+    }
+  }, []);
+
   const handleTrashPress = useCallback((product: Product) => {
     setRemoveTarget(product);
   }, []);
@@ -389,8 +458,11 @@ export default function MyCartScreen() {
         return "Enter the card holder's name.";
       }
     }
+    if (deliveryTiming === "asap" && !selectedDriverId) {
+      return "Please select a driver for your ASAP delivery.";
+    }
     return null;
-  }, [cartLines.length, selectedAddressId, paymentMethod, cardNumber, cardExpiry, cardCvv, cardHolder]);
+  }, [cartLines.length, selectedAddressId, paymentMethod, cardNumber, cardExpiry, cardCvv, cardHolder, deliveryTiming, selectedDriverId]);
 
   const handlePlaceOrder = useCallback(async () => {
     // ─── BUSINESS HOURS CHECK ───
@@ -421,6 +493,7 @@ export default function MyCartScreen() {
         paymentMethod: paymentMethod,
         deliveryTiming: deliveryTiming,
         deliveryDateTime: (deliveryTiming === "asap" ? new Date() : scheduledDate).toISOString(),
+        driverId: deliveryTiming === "asap" ? selectedDriverId : null,
         cartItems: cartLines.map(line => ({
           productId: line.product.id,
           quantity: line.quantity,
@@ -463,7 +536,7 @@ export default function MyCartScreen() {
     } finally {
       setIsPlacingOrder(false);
     }
-  }, [validateOrder, addresses, selectedAddressId, paymentMethod, cartLines, deliveryTiming, scheduledDate, subtotal, total]);
+  }, [validateOrder, addresses, selectedAddressId, paymentMethod, cartLines, deliveryTiming, scheduledDate, subtotal, total, selectedDriverId]);
 
   const handleContinueShopping = useCallback(() => {
     setShowSuccessModal(false);
@@ -546,7 +619,7 @@ export default function MyCartScreen() {
           <DeliveryTimingCard
             colors={colors}
             timing={deliveryTiming}
-            onSelectTiming={setDeliveryTiming}
+            onSelectTiming={handleSelectTiming}
             scheduledDate={scheduledDate}
             onPressDate={() => setShowDatePicker(true)}
             onPressTime={() => setShowTimePicker(true)}
@@ -559,6 +632,16 @@ export default function MyCartScreen() {
             onSelectAddress={setSelectedAddressId}
             onAddAddress={handleAddAddress}
           />
+
+          {deliveryTiming === "asap" && selectedAddressId && (
+            <DriverSelectionCard
+              colors={colors}
+              drivers={nearbyDrivers}
+              selectedDriverId={selectedDriverId}
+              onSelectDriver={setSelectedDriverId}
+              isLoading={isLoadingDrivers}
+            />
+          )}
 
           <PaymentMethodCard
             colors={colors}
@@ -975,6 +1058,77 @@ function DeliveryAddressCard({
   );
 }
 
+type DriverSelectionCardProps = {
+  colors: ThemeColors;
+  drivers: NearbyDriver[];
+  selectedDriverId: number | null;
+  onSelectDriver: (id: number) => void;
+  isLoading: boolean;
+};
+
+function DriverSelectionCard({
+  colors,
+  drivers,
+  selectedDriverId,
+  onSelectDriver,
+  isLoading,
+}: DriverSelectionCardProps) {
+  return (
+    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>Choose Your Driver</Text>
+
+      {isLoading ? (
+        <View style={styles.driverEmptyState}>
+          <View style={[styles.driverEmptyIconCircle, { backgroundColor: colors.inputBackground }]}>
+            <Ionicons name="search-outline" size={26} color={colors.primaryBlue} />
+          </View>
+          <Text style={[styles.driverEmptyTitle, { color: colors.darkText }]}>Finding drivers nearby...</Text>
+        </View>
+      ) : drivers.length === 0 ? (
+        <View style={styles.driverEmptyState}>
+          <View style={[styles.driverEmptyIconCircle, { backgroundColor: colors.inputBackground }]}>
+            <Ionicons name="bicycle-outline" size={26} color={colors.grayText} />
+          </View>
+          <Text style={[styles.driverEmptyTitle, { color: colors.darkText }]}>No Drivers Nearby</Text>
+          <Text style={[styles.driverEmptyText, { color: colors.grayText }]}>
+            No drivers are currently online near this address. Try again shortly, or switch to Schedule Delivery.
+          </Text>
+        </View>
+      ) : (
+        drivers.map((driver) => {
+          const isSelected = driver.id === selectedDriverId;
+          return (
+            <Pressable
+              key={driver.id}
+              onPress={() => onSelectDriver(driver.id)}
+              style={[
+                styles.addressRow,
+                {
+                  backgroundColor: isSelected ? colors.inputBackground : "transparent",
+                  borderColor: isSelected ? colors.primaryBlue : colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="bicycle-outline"
+                size={18}
+                color={isSelected ? colors.primaryBlue : colors.grayText}
+              />
+              <View style={styles.addressTextColumn}>
+                <Text style={[styles.addressLabel, { color: colors.darkText }]}>{driver.fullName}</Text>
+                <Text style={[styles.addressDetail, { color: colors.grayText }]} numberOfLines={1}>
+                  {driver.vehicle} · {driver.distanceKm.toFixed(1)} km away · ~{driver.etaMinutes} min
+                </Text>
+              </View>
+              {isSelected && <Ionicons name="checkmark-circle" size={18} color={colors.primaryBlue} />}
+            </Pressable>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
 type PaymentMethodCardProps = {
   colors: ThemeColors;
   paymentMethod: PaymentMethod | null;
@@ -1174,16 +1328,33 @@ function RemoveConfirmationModal({ product, colors, onCancel, onConfirm, }: { pr
     <Modal visible={product !== null} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
         <View style={[styles.confirmModalCard, { backgroundColor: colors.white }]}>
-          <View style={[styles.confirmIconCircle, { backgroundColor: colors.error + "1A" }]}>
-            <Ionicons name="trash-outline" size={26} color={colors.error} />
+          <View style={[styles.confirmIconCircle, { backgroundColor: colors.error + "14" }]}>
+            <Ionicons name="trash-outline" size={28} color={colors.error} />
           </View>
-          <Text style={[styles.confirmTitle, { color: colors.darkText }]}> Remove {product?.name} from your cart? </Text>
-          <Text style={[styles.confirmSubtitle, { color: colors.grayText }]}> You can always add it back later. </Text>
+          <Text style={[styles.confirmTitle, { color: colors.darkText }]}>
+            Remove <Text style={{ fontWeight: "800" }}>{product?.name}</Text>?
+          </Text>
+          <Text style={[styles.confirmSubtitle, { color: colors.grayText }]}>
+            It'll be removed from your cart, but you can always add it back later.
+          </Text>
           <View style={styles.confirmButtonsRow}>
-            <Pressable onPress={onCancel} style={[styles.confirmCancelButton, { borderColor: colors.border }]} >
+            <Pressable
+              onPress={onCancel}
+              style={({ pressed }) => [
+                styles.confirmCancelButton,
+                { borderColor: colors.border, backgroundColor: colors.inputBackground, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
               <Text style={[styles.confirmCancelText, { color: colors.darkText }]}>Cancel</Text>
             </Pressable>
-            <Pressable onPress={onConfirm} style={[styles.confirmRemoveButton, { backgroundColor: colors.error }]} >
+            <Pressable
+              onPress={onConfirm}
+              style={({ pressed }) => [
+                styles.confirmRemoveButton,
+                { backgroundColor: colors.error, opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <Ionicons name="trash" size={16} color="#FFFFFF" />
               <Text style={styles.confirmRemoveText}>Remove</Text>
             </Pressable>
           </View>
@@ -1400,6 +1571,10 @@ const styles = StyleSheet.create({
   addressDetail: { fontSize: 12 },
   addAddressRow: { flexDirection: "row", alignItems: "center", marginTop: 6, paddingVertical: 4 },
   addAddressText: { fontSize: 13, fontWeight: "700", marginLeft: 6 },
+  driverEmptyState: { alignItems: "center", justifyContent: "center", paddingVertical: 20, paddingHorizontal: 12 },
+  driverEmptyIconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  driverEmptyTitle: { fontSize: 14, fontWeight: "700", marginBottom: 4, textAlign: "center" },
+  driverEmptyText: { fontSize: 13, lineHeight: 19, textAlign: "center" },
   paymentOptionsRow: { flexDirection: "row", marginHorizontal: -4 },
   paymentOptionWrapper: { flex: 1, paddingHorizontal: 4 },
   paymentOption: { height: 48, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center", flexDirection: "row" },

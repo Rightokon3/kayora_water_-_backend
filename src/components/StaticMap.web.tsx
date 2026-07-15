@@ -1,91 +1,74 @@
-/**
- * StaticMap (web)
- * Securely lazy-loads Leaflet only in the browser to prevent SSR errors.
- */
-import React, { useEffect, useState } from "react";
-import { StyleSheet, View, Text } from "react-native";
+import React, { useEffect, useRef } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { Appearance } from "react-native";
 
-export type StaticMapProps = {
+const STYLE_LIGHT = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+const STYLE_DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
+export function StaticMap({
+  latitude,
+  longitude,
+  markerLabel,
+  zoom = 15,
+}: {
   latitude: number;
   longitude: number;
-  markerLabel: string;
+  markerLabel?: string;
   zoom?: number;
-};
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
 
-export function StaticMap({ latitude, longitude, markerLabel, zoom = 15 }: StaticMapProps) {
-  const [MapComponents, setMapComponents] = useState<any>(null);
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
 
-useEffect(() => {
-    // Dynamically import the JS libraries first
-    Promise.all([
-      import("react-leaflet"),
-      import("leaflet"),
-    ]).then(async ([ReactLeaflet, Leaflet]) => {
-      // Safely load the static CSS file separately without inline casting
-      await import("leaflet/dist/leaflet.css");
+    const isDark = Appearance.getColorScheme() === "dark";
 
-      const L = Leaflet.default;
-
-      // Define the icon inside the browser-only context
-      const pinIcon = L.divIcon({
-        html: "<div style='font-size:28px;line-height:1'>📍</div>",
-        className: "",
-        iconSize: [28, 28],
-        iconAnchor: [14, 28],
-      });
-
-      // Save components and configured icon to state
-      setMapComponents({
-        MapContainer: ReactLeaflet.MapContainer,
-        TileLayer: ReactLeaflet.TileLayer,
-        Marker: ReactLeaflet.Marker,
-        Popup: ReactLeaflet.Popup,
-        pinIcon,
-      });
-    }).catch(err => {
-      console.error("Failed to load Leaflet map packages:", err);
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: isDark ? STYLE_DARK : STYLE_LIGHT,
+      center: [longitude, latitude],
+      zoom,
+      attributionControl: { compact: true },
+      interactive: false, // preview only — "Open in Google Maps" handles navigation
     });
+
+    map.on("load", () => {
+      const wrapper = document.createElement("div");
+      wrapper.style.display = "flex";
+      wrapper.style.flexDirection = "column";
+      wrapper.style.alignItems = "center";
+
+      if (markerLabel) {
+        const label = document.createElement("div");
+        label.textContent = markerLabel;
+        label.style.cssText =
+          "background:#0D4A8C;color:#fff;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap;margin-bottom:4px;box-shadow:0 2px 6px rgba(0,0,0,0.2);";
+        wrapper.appendChild(label);
+      }
+
+      const pin = document.createElement("div");
+      pin.style.width = "18px";
+      pin.style.height = "18px";
+      pin.style.borderRadius = "9px";
+      pin.style.background = "#0D4A8C";
+      pin.style.border = "3px solid #FFFFFF";
+      pin.style.boxShadow = "0 0 0 4px rgba(13,74,140,0.25)";
+      wrapper.appendChild(pin);
+
+      new maplibregl.Marker({ element: wrapper, anchor: "bottom" }).setLngLat([longitude, latitude]).addTo(map);
+    });
+
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // While loading on the client or rendering on the server, show a fallback UI
-  if (!MapComponents) {
-    return (
-      <View style={[styles.container, styles.fallback]}>
-        <Text style={styles.fallbackText}>Loading Map...</Text>
-      </View>
-    );
-  }
-
-  const { MapContainer, TileLayer, Marker, Popup, pinIcon } = MapComponents;
-
-  return (
-    <View style={styles.container}>
-      <MapContainer
-        center={[latitude, longitude]}
-        zoom={zoom}
-        zoomControl={false}
-        attributionControl={false}
-        style={{ width: "100%", height: "100%" }}
-      >
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        <Marker position={[latitude, longitude]} icon={pinIcon}>
-          <Popup>{markerLabel}</Popup>
-        </Marker>
-      </MapContainer>
-    </View>
-  );
+  // Real DOM node — this file only ever runs on web, so a plain div is fine.
+  return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />;
 }
-
-const styles = StyleSheet.create({
-  container: { width: "100%", height: "100%", overflow: "hidden" },
-  fallback: {
-    backgroundColor: "#F2F2F7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fallbackText: {
-    color: "#8E8E93",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-});

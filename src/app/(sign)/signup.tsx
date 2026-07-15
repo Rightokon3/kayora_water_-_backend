@@ -210,7 +210,7 @@ export default function SignupScreen() {
                 setUsername(text);
                 markTouched("username");
               }}
-              placeholder="e.g. paul_walker"
+              placeholder="e.g. John Doe"
               autoCapitalize="none"
               autoCorrect={false}
               errorText={shouldShow("username") ? usernameError : undefined}
