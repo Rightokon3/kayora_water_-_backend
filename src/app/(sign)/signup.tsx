@@ -40,8 +40,12 @@ type TouchedFields = {
   repeatPassword: boolean;
 };
 
-// Auto-detects local host endpoint based on your emulator environment
-const API_BASE_URL = Platform.OS === "android" ? "http://127.0.0.1:8000" : "http://localhost:8000";
+// Auto-detects local host endpoint based on your emulator/browser environment.
+// - Android emulator: 127.0.0.1 points at the emulator itself, not your host
+//   machine, so it must use the special 10.0.2.2 alias instead.
+// - iOS simulator and Expo Web: localhost correctly reaches your host machine.
+const API_BASE_URL =
+  Platform.OS === "android" ? "http://10.0.2.2:8000" : "http://localhost:8000";
 
 export default function SignupScreen() {
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
@@ -130,11 +134,22 @@ export default function SignupScreen() {
       formData.append("password_confirmation", repeatPassword);
 
       if (profileImageUri) {
-        formData.append("profile_picture", {
-          uri: Platform.OS === "android" ? profileImageUri : profileImageUri.replace("file://", ""),
-          type: "image/jpeg",
-          name: "profile.jpg",
-        } as any);
+        if (Platform.OS === "web") {
+          // On Expo Web, expo-image-picker returns a blob:/data: URI, and
+          // browsers don't understand React Native's {uri,type,name} file
+          // shorthand — FormData needs an actual Blob/File object here.
+          const imageResponse = await fetch(profileImageUri);
+          const imageBlob = await imageResponse.blob();
+          formData.append("profile_picture", imageBlob, "profile.jpg");
+        } else {
+          // iOS / Android: RN's fetch polyfill understands this shorthand
+          // and streams the file at `uri` directly as multipart data.
+          formData.append("profile_picture", {
+            uri: profileImageUri,
+            type: "image/jpeg",
+            name: "profile.jpg",
+          } as any);
+        }
       }
 
       const response = await fetch(`${API_BASE_URL}/api/register`, {
