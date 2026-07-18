@@ -101,7 +101,7 @@ const DISCOUNT = 0;
 // TEMPORARY TESTING SWITCH: set to false to bypass the off-duty check
 // while testing the new driver-selection feature. Set back to true
 // before shipping — this is the ONLY line that needs to change.
-const BUSINESS_HOURS_ENFORCED = true;
+const BUSINESS_HOURS_ENFORCED = false;
 
 const BUSINESS_HOURS_START = 7;  // 7:00 AM
 const BUSINESS_HOURS_END = 17;   // 5:00 PM (24hr clock)

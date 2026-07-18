@@ -14,6 +14,7 @@ import { SearchLocation } from "@/components/SearchLocation";
 import { LocationCard } from "@/components/LocationCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
+import { MapLocationPicker, MapLocationPickerResult } from "@/components/MapLocationPicker.web";
 import { Colors } from "@/constants/colors";
 import { AddressLabelType, AddressSuggestion, SavedAddress } from "@/types/location";
 
@@ -38,6 +39,12 @@ export default function RouteSetupScreen() {
   const [pendingSuggestion, setPendingSuggestion] = useState<AddressSuggestion | null>(null);
   const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Map picker — a second, alternative way to produce a pendingSuggestion
+  // alongside the existing text search. Both paths converge on the exact
+  // same shape ({title, subtitle, latitude, longitude}), so handleAddAddress
+  // below needed zero changes to support this.
+  const [mapPickerVisible, setMapPickerVisible] = useState(false);
 
   const toastRef = useRef<AnimatedToastRef>(null);
 
@@ -78,10 +85,28 @@ export default function RouteSetupScreen() {
     setPendingSuggestion(suggestion);
   }, []);
 
+  const handleMapPickerConfirm = useCallback((result: MapLocationPickerResult) => {
+    // Same shape as an AddressSuggestion from the search box, so this just
+    // slots into the exact same pendingSuggestion state and "Add Address"
+    // button flow below — no separate save path needed.
+    setPendingSuggestion({
+      title: result.title,
+      subtitle: result.subtitle,
+      latitude: result.latitude,
+      longitude: result.longitude,
+    });
+    setMapPickerVisible(false);
+    toastRef.current?.show({
+      message: "Location pinned — tap Add Address to save it",
+      type: "success",
+      duration: 2200,
+    });
+  }, []);
+
   const handleAddAddress = useCallback(async () => {
     if (!pendingSuggestion) {
       toastRef.current?.show({
-        message: "Search and select an address first",
+        message: "Search, or pick on the map, an address first",
         type: "error",
       });
       return;
@@ -89,7 +114,7 @@ export default function RouteSetupScreen() {
 
     try {
       // 1. Recover token credentials
-      const profile = await getUserProfile(); 
+      const profile = await getUserProfile();
       const token = profile?.token || "";
 
       let backendSyncedAddress = null;
@@ -133,7 +158,7 @@ export default function RouteSetupScreen() {
       await saveAddressesToStorage(updatedList);
       setAddresses(updatedList);
       setPendingSuggestion(null);
-      
+
       toastRef.current?.show({
         message: "Address added successfully",
         type: "success",
@@ -221,6 +246,32 @@ export default function RouteSetupScreen() {
           />
         </View>
 
+        {/* Pinpoint-on-map alternative to typing a search query. Selecting
+            here or via search both just populate pendingSuggestion — the
+            small preview chip below and the "Add Address" button downstream
+            don't care which path produced it. */}
+        <Pressable onPress={() => setMapPickerVisible(true)} style={styles.mapPickButton}>
+          <Ionicons name="map-outline" size={18} color={Colors.primaryBlue} />
+          <Text style={styles.mapPickButtonText}>Pinpoint on Map</Text>
+        </Pressable>
+
+        {pendingSuggestion && (
+          <View style={styles.pendingPreview}>
+            <Ionicons name="location" size={16} color={Colors.primaryBlue} />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={styles.pendingPreviewTitle} numberOfLines={1}>
+                {pendingSuggestion.title}
+              </Text>
+              <Text style={styles.pendingPreviewSubtitle} numberOfLines={1}>
+                {pendingSuggestion.subtitle}
+              </Text>
+            </View>
+            <Pressable onPress={() => setPendingSuggestion(null)} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={Colors.grayText} />
+            </Pressable>
+          </View>
+        )}
+
         <PrimaryButton
           label="Add Address"
           onPress={handleAddAddress}
@@ -253,6 +304,14 @@ export default function RouteSetupScreen() {
         />
       </Animated.View>
 
+      <MapLocationPicker
+        visible={mapPickerVisible}
+        initialLatitude={pendingSuggestion?.latitude}
+        initialLongitude={pendingSuggestion?.longitude}
+        onConfirm={handleMapPickerConfirm}
+        onClose={() => setMapPickerVisible(false)}
+      />
+
       <AnimatedToast ref={toastRef} />
     </SafeAreaView>
   );
@@ -271,6 +330,28 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: "600", color: Colors.grayText },
   chipTextSelected: { color: Colors.primaryBlue },
   searchSection: { marginBottom: 14, zIndex: 10 },
+  mapPickButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryBlue,
+    marginBottom: 14,
+  },
+  mapPickButtonText: { fontSize: 13.5, fontWeight: "700", color: Colors.primaryBlue },
+  pendingPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.lightBlue,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  pendingPreviewTitle: { fontSize: 13, fontWeight: "700", color: Colors.darkText },
+  pendingPreviewSubtitle: { fontSize: 11.5, color: Colors.grayText, marginTop: 1 },
   addButton: { marginBottom: 20 },
   listContent: { paddingBottom: 12 },
   emptyListText: { fontSize: 13, color: Colors.grayText, textAlign: "center", paddingVertical: 16 },
