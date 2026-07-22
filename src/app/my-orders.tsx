@@ -252,7 +252,7 @@ export default function MyOrdersScreen() {
 
       {isLoading ? (
         <View style={styles.centerWrapper}>
-          <Text style={{ color: colors.grayText }}>Fetching database logs...</Text>
+          <Text style={{ color: colors.grayText }}>Loading ...</Text>
         </View>
       ) : filteredOrders.length === 0 ? (
         <EmptyOrders colors={colors} filter={activeFilter} onStartShopping={handleStartShopping} />
