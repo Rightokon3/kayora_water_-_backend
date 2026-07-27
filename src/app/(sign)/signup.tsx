@@ -1,36 +1,36 @@
+import { router } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-  Easing as ReanimatedEasing,
+    Easing as ReanimatedEasing,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
 import { AuthInput } from "@/components/AuthInput";
 import { PasswordInput } from "@/components/PasswordInput";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
 import { ProfileImagePicker } from "@/components/ProfileImagePicker";
 import { Colors } from "@/constants/colors";
-import {
-  validateEmail,
-  validatePassword,
-  validatePasswordMatch,
-  validatePhone,
-  validateUsername,
-} from "../../../utils/validation";
 import { saveUserProfile } from "@/services/storage";
+import {
+    validateEmail,
+    validatePassword,
+    validatePasswordMatch,
+    validatePhone,
+    validateUsername,
+} from "../../../utils/validation";
 
 type TouchedFields = {
   username: boolean;
@@ -45,7 +45,9 @@ type TouchedFields = {
 //   machine, so it must use the special 10.0.2.2 alias instead.
 // - iOS simulator and Expo Web: localhost correctly reaches your host machine.
 const API_BASE_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:8000" : "http://localhost:8000";
+  Platform.OS === "android"
+    ? "http://10.0.2.2:8000"
+    : "https://kayorabackend-production.up.railway.app";
 
 export default function SignupScreen() {
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
@@ -77,7 +79,10 @@ export default function SignupScreen() {
     headerOpacity.value = withTiming(1, { duration: 420 });
     headerTranslateY.value = withTiming(0, { duration: 420, easing });
     formOpacity.value = withDelay(120, withTiming(1, { duration: 420 }));
-    formTranslateY.value = withDelay(120, withTiming(0, { duration: 420, easing }));
+    formTranslateY.value = withDelay(
+      120,
+      withTiming(0, { duration: 420, easing }),
+    );
   }, []);
 
   const headerStyle = useAnimatedStyle(() => ({
@@ -94,15 +99,19 @@ export default function SignupScreen() {
   const phoneError = useMemo(() => validatePhone(phone), [phone]);
   const passwordError = useMemo(() => validatePassword(password), [password]);
   const repeatPasswordError = useMemo(
-    () => (passwordError ? undefined : validatePasswordMatch(password, repeatPassword)),
-    [password, repeatPassword, passwordError]
+    () =>
+      passwordError
+        ? undefined
+        : validatePasswordMatch(password, repeatPassword),
+    [password, repeatPassword, passwordError],
   );
 
-  const passwordsMatch = !passwordError && !repeatPasswordError && repeatPassword.length > 0;
+  const passwordsMatch =
+    !passwordError && !repeatPasswordError && repeatPassword.length > 0;
 
   const shouldShow = useCallback(
     (field: keyof TouchedFields) => touched[field] || submitAttempted,
-    [touched, submitAttempted]
+    [touched, submitAttempted],
   );
 
   const markTouched = useCallback((field: keyof TouchedFields) => {
@@ -110,7 +119,11 @@ export default function SignupScreen() {
   }, []);
 
   const isFormValid =
-    !usernameError && !emailError && !phoneError && !passwordError && !repeatPasswordError;
+    !usernameError &&
+    !emailError &&
+    !phoneError &&
+    !passwordError &&
+    !repeatPasswordError;
 
   const handleCreateAccount = useCallback(async () => {
     setSubmitAttempted(true);
@@ -155,7 +168,7 @@ export default function SignupScreen() {
       const response = await fetch(`${API_BASE_URL}/api/register`, {
         method: "POST",
         headers: {
-          "Accept": "application/json",
+          Accept: "application/json",
         },
         body: formData,
       });
@@ -172,20 +185,30 @@ export default function SignupScreen() {
         email: data.user.email,
         phone: data.user.phone,
         profileImageUri: data.user.profile_picture,
-        token: data.token, 
+        token: data.token,
         createdAt: Date.now(),
       });
 
       router.replace("/routeSetup");
     } catch (error: any) {
       toastRef.current?.show({
-        message: error.message || "Something went wrong creating your account. Try again.",
+        message:
+          error.message ||
+          "Something went wrong creating your account. Try again.",
         type: "error",
       });
     } finally {
       setIsSubmitting(false);
     }
-  }, [isFormValid, username, email, phone, password, repeatPassword, profileImageUri]);
+  }, [
+    isFormValid,
+    username,
+    email,
+    phone,
+    password,
+    repeatPassword,
+    profileImageUri,
+  ]);
 
   const handleNavigateToLogin = useCallback(() => {
     router.push("/login");
@@ -205,7 +228,9 @@ export default function SignupScreen() {
         >
           <Animated.View style={[styles.header, headerStyle]}>
             <Text style={styles.title}>Create your account</Text>
-            <Text style={styles.subtitle}>Join Kayora and get water delivered fast</Text>
+            <Text style={styles.subtitle}>
+              Join Kayora and get water delivered fast
+            </Text>
           </Animated.View>
 
           <Animated.View style={[styles.form, formStyle]}>
@@ -283,7 +308,9 @@ export default function SignupScreen() {
                 markTouched("repeatPassword");
               }}
               placeholder="Re-enter your password"
-              errorText={shouldShow("repeatPassword") ? repeatPasswordError : undefined}
+              errorText={
+                shouldShow("repeatPassword") ? repeatPasswordError : undefined
+              }
               showMatchIcon
               isValid={passwordsMatch}
               returnKeyType="done"
@@ -315,9 +342,20 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.white },
   flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+  },
   header: { marginBottom: 24 },
-  title: { fontSize: 26, fontWeight: "700", color: Colors.darkText, letterSpacing: -0.4, marginBottom: 6 },
+  title: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: Colors.darkText,
+    letterSpacing: -0.4,
+    marginBottom: 6,
+  },
   subtitle: { fontSize: 15, color: Colors.grayText },
   form: { width: "100%" },
   fieldsSpacer: { height: 24 },

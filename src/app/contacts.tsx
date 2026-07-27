@@ -60,11 +60,11 @@ import { validateEmail, validatePhone } from "../../utils/validation";
 // Constants
 // ---------------------------------------------------------------------------
 
-const API_BASE_URL = "http://127.0.0.1:8000";
-const KAYORA_PHONE = "+2348012345678";
-const KAYORA_EMAIL = "info@kayorawater.com";
-const KAYORA_LAT = 4.6548;
-const KAYORA_LNG = 7.9192;
+const API_BASE_URL = "https://kayorabackend-production.up.railway.app";
+const KAYORA_PHONE = "0904 078 9918";
+const KAYORA_EMAIL = "info@kaybibeverage.com";
+const KAYORA_LAT = 4.6486423;
+const KAYORA_LNG = 7.9478112;
 
 const BUSINESS_TYPES: BusinessType[] = [
   "Retail Shop",

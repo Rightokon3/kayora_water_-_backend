@@ -1,19 +1,19 @@
 import { router } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import Animated, {
-  Easing as ReanimatedEasing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
+    Easing as ReanimatedEasing,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -24,9 +24,12 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { Colors } from "@/constants/colors";
 import { validateLoginForm } from "../../../utils/validation";
 
-import { saveUserProfile } from "@/services/storage"; 
+import { saveUserProfile } from "@/services/storage";
 
-const API_BASE_URL = Platform.OS === "android" ? "http://10.0.2.2:8000" : "http://localhost:8000";
+const API_BASE_URL =
+  Platform.OS === "android"
+    ? "http://10.0.2.2:8000"
+    : "https://kayorabackend-production.up.railway.app";
 
 export default function LoginScreen() {
   const [identifier, setIdentifier] = useState("");
@@ -47,7 +50,10 @@ export default function LoginScreen() {
     headerOpacity.value = withTiming(1, { duration: 420 });
     headerTranslateY.value = withTiming(0, { duration: 420, easing });
     formOpacity.value = withDelay(120, withTiming(1, { duration: 420 }));
-    formTranslateY.value = withDelay(120, withTiming(0, { duration: 420, easing }));
+    formTranslateY.value = withDelay(
+      120,
+      withTiming(0, { duration: 420, easing }),
+    );
   }, []);
 
   const headerStyle = useAnimatedStyle(() => ({
@@ -74,7 +80,7 @@ export default function LoginScreen() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify({
           email: identifier,
@@ -103,7 +109,8 @@ export default function LoginScreen() {
       }
     } catch (error) {
       toastRef.current?.show({
-        message: "Network request failed. Ensure your backend server is running and CORS is allowed.",
+        message:
+          "Network request failed. Ensure your backend server is running and CORS is allowed.",
         type: "error",
       });
     } finally {
@@ -129,7 +136,9 @@ export default function LoginScreen() {
         >
           <Animated.View style={[styles.header, headerStyle]}>
             <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in to continue to Kayora Water</Text>
+            <Text style={styles.subtitle}>
+              Sign in to continue to Kayora Water
+            </Text>
           </Animated.View>
 
           <Animated.View style={[styles.form, formStyle]}>
@@ -169,7 +178,9 @@ export default function LoginScreen() {
             />
 
             <View style={styles.signupRow}>
-              <Text style={styles.signupPrompt}>Don&apos;t have an account? </Text>
+              <Text style={styles.signupPrompt}>
+                Don&apos;t have an account?{" "}
+              </Text>
               <Text style={styles.signupLink} onPress={handleNavigateToSignup}>
                 Sign Up
               </Text>
@@ -194,7 +205,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   header: { marginBottom: 32 },
-  title: { fontSize: 28, fontWeight: "700", color: Colors.darkText, letterSpacing: -0.4, marginBottom: 6 },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: Colors.darkText,
+    letterSpacing: -0.4,
+    marginBottom: 6,
+  },
   subtitle: { fontSize: 15, color: Colors.grayText },
   form: { width: "100%" },
   loginButton: { marginTop: 12 },

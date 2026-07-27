@@ -1,6 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-  FlatList,
   Modal,
   Platform,
   Pressable,
@@ -8,32 +19,26 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import Animated, {
+  Easing as ReanimatedEasing,
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
-  withSpring,
   withSequence,
-  Easing as ReanimatedEasing,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useTheme } from "@/hooks/useTheme";
-import { BottomTabBar } from "@/components/BottomTabBar";
 import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
-import { PRODUCTS, Product, getProductById } from "@/constants/products";
+import { BottomTabBar } from "@/components/BottomTabBar";
+import { Product, getProductById } from "@/constants/products";
+import { useTheme } from "@/hooks/useTheme";
+import { getUserProfile } from "@/services/storage";
 import { SavedAddress } from "@/types/location";
-import {
-  getUserProfile,
-} from "@/services/storage";
 
-const API_BASE_URL = "http://localhost:8000"; 
+const API_BASE_URL = "https://kayorabackend-production.up.railway.app";
 
 // ─── LOCAL TYPES REPLACING THE BROKEN STORAGE IMPORTS ───
 export type CartItem = {
@@ -103,8 +108,8 @@ const DISCOUNT = 0;
 // before shipping — this is the ONLY line that needs to change.
 const BUSINESS_HOURS_ENFORCED = false;
 
-const BUSINESS_HOURS_START = 7;  // 7:00 AM
-const BUSINESS_HOURS_END = 17;   // 5:00 PM (24hr clock)
+const BUSINESS_HOURS_START = 7; // 7:00 AM
+const BUSINESS_HOURS_END = 17; // 5:00 PM (24hr clock)
 
 function isWithinBusinessHours(date: Date): boolean {
   if (!BUSINESS_HOURS_ENFORCED) return true;
@@ -148,7 +153,7 @@ function CartSkeleton({ colors }: { colors: any }) {
     opacity.value = withTiming(0.8, { duration: 800 }, () => {
       opacity.value = withTiming(0.4, { duration: 800 });
     });
-    
+
     const interval = setInterval(() => {
       opacity.value = withTiming(0.8, { duration: 800 }, () => {
         opacity.value = withTiming(0.4, { duration: 800 });
@@ -169,18 +174,70 @@ function CartSkeleton({ colors }: { colors: any }) {
           key={key}
           style={[
             styles.cartLineCard,
-            { backgroundColor: colors.cardBackground, borderColor: colors.border },
+            {
+              backgroundColor: colors.cardBackground,
+              borderColor: colors.border,
+            },
             animatedStyle,
           ]}
         >
-          <View style={[styles.cartLineImageWrapper, { backgroundColor: colors.border }]} />
+          <View
+            style={[
+              styles.cartLineImageWrapper,
+              { backgroundColor: colors.border },
+            ]}
+          />
           <View style={styles.cartLineBody}>
-            <View style={{ backgroundColor: colors.border, width: 40, height: 10, borderRadius: 4, marginBottom: 6 }} />
-            <View style={{ backgroundColor: colors.border, width: "70%", height: 16, borderRadius: 4, marginBottom: 6 }} />
-            <View style={{ backgroundColor: colors.border, width: "45%", height: 12, borderRadius: 4, marginBottom: 12 }} />
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <View style={{ backgroundColor: colors.border, width: 70, height: 26, borderRadius: 14 }} />
-              <View style={{ backgroundColor: colors.border, width: 60, height: 16, borderRadius: 4 }} />
+            <View
+              style={{
+                backgroundColor: colors.border,
+                width: 40,
+                height: 10,
+                borderRadius: 4,
+                marginBottom: 6,
+              }}
+            />
+            <View
+              style={{
+                backgroundColor: colors.border,
+                width: "70%",
+                height: 16,
+                borderRadius: 4,
+                marginBottom: 6,
+              }}
+            />
+            <View
+              style={{
+                backgroundColor: colors.border,
+                width: "45%",
+                height: 12,
+                borderRadius: 4,
+                marginBottom: 12,
+              }}
+            />
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: colors.border,
+                  width: 70,
+                  height: 26,
+                  borderRadius: 14,
+                }}
+              />
+              <View
+                style={{
+                  backgroundColor: colors.border,
+                  width: 60,
+                  height: 16,
+                  borderRadius: 4,
+                }}
+              />
             </View>
           </View>
         </Animated.View>
@@ -198,8 +255,11 @@ export default function MyCartScreen() {
   const [profile, setProfile] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
-  const [deliveryTiming, setDeliveryTiming] = useState<DeliveryTimingOption>("asap");
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
+    null,
+  );
+  const [deliveryTiming, setDeliveryTiming] =
+    useState<DeliveryTimingOption>("asap");
   const [scheduledDate, setScheduledDate] = useState<Date>(() => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -209,7 +269,9 @@ export default function MyCartScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(
+    null,
+  );
   const [cardNumber, setCardNumber] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvv, setCardCvv] = useState("");
@@ -234,13 +296,22 @@ export default function MyCartScreen() {
 
       const [cartRes, addressRes, profileRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/cart`, {
-          headers: { "Accept": "application/json", "Authorization": `Bearer ${token}` },
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
         }),
         fetch(`${API_BASE_URL}/api/saved-addresses`, {
-          headers: { "Accept": "application/json", "Authorization": `Bearer ${token}` },
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
         }),
         fetch(`${API_BASE_URL}/api/user-profile`, {
-          headers: { "Accept": "application/json", "Authorization": `Bearer ${token}` },
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
         }),
       ]);
 
@@ -253,7 +324,10 @@ export default function MyCartScreen() {
       setProfile(profileJson?.user || profileJson || authProfile);
     } catch (err) {
       console.error("Backend Cart loading sync failure:", err);
-      toastRef.current?.show({ message: "Unable to sync with database inventory.", type: "error" });
+      toastRef.current?.show({
+        message: "Unable to sync with database inventory.",
+        type: "error",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -273,66 +347,84 @@ export default function MyCartScreen() {
   }, [cartItems]);
 
   const subtotal = useMemo(
-    () => cartLines.reduce((sum, line) => sum + line.product.price * line.quantity, 0),
-    [cartLines]
+    () =>
+      cartLines.reduce(
+        (sum, line) => sum + line.product.price * line.quantity,
+        0,
+      ),
+    [cartLines],
   );
 
   const total = useMemo(
-    () => subtotal + (cartLines.length > 0 ? DELIVERY_FEE + SERVICE_FEE - DISCOUNT : 0),
-    [subtotal, cartLines.length]
+    () =>
+      subtotal +
+      (cartLines.length > 0 ? DELIVERY_FEE + SERVICE_FEE - DISCOUNT : 0),
+    [subtotal, cartLines.length],
   );
 
-  const handleIncrement = useCallback(async (productId: number, currentQuantity: number) => {
-    try {
-      const userProfile = await getUserProfile();
-      const token = userProfile?.token || "";
+  const handleIncrement = useCallback(
+    async (productId: number, currentQuantity: number) => {
+      try {
+        const userProfile = await getUserProfile();
+        const token = userProfile?.token || "";
 
-      const response = await fetch(`${API_BASE_URL}/api/cart/update`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ product_id: productId, quantity: currentQuantity + 1 })
-      });
+        const response = await fetch(`${API_BASE_URL}/api/cart/update`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            product_id: productId,
+            quantity: currentQuantity + 1,
+          }),
+        });
 
-      const json = await response.json();
-      if (response.ok) {
-        setCartItems(json.cart || []);
+        const json = await response.json();
+        if (response.ok) {
+          setCartItems(json.cart || []);
+        }
+      } catch (err) {
+        console.error("Failed to increment quantity:", err);
       }
-    } catch (err) {
-      console.error("Failed to increment quantity:", err);
-    }
-  }, []);
+    },
+    [],
+  );
 
-  const handleDecrement = useCallback(async (product: Product, currentQuantity: number) => {
-    if (currentQuantity <= 1) {
-      setRemoveTarget(product);
-      return;
-    }
-    try {
-      const userProfile = await getUserProfile();
-      const token = userProfile?.token || "";
-
-      const response = await fetch(`${API_BASE_URL}/api/cart/update`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ product_id: product.id, quantity: currentQuantity - 1 })
-      });
-
-      const json = await response.json();
-      if (response.ok) {
-        setCartItems(json.cart || []);
+  const handleDecrement = useCallback(
+    async (product: Product, currentQuantity: number) => {
+      if (currentQuantity <= 1) {
+        setRemoveTarget(product);
+        return;
       }
-    } catch (err) {
-      console.error("Failed to decrement quantity:", err);
-    }
-  }, []);
+      try {
+        const userProfile = await getUserProfile();
+        const token = userProfile?.token || "";
+
+        const response = await fetch(`${API_BASE_URL}/api/cart/update`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            product_id: product.id,
+            quantity: currentQuantity - 1,
+          }),
+        });
+
+        const json = await response.json();
+        if (response.ok) {
+          setCartItems(json.cart || []);
+        }
+      } catch (err) {
+        console.error("Failed to decrement quantity:", err);
+      }
+    },
+    [],
+  );
 
   const handleConfirmRemove = useCallback(async () => {
     if (!removeTarget) return;
@@ -340,13 +432,16 @@ export default function MyCartScreen() {
       const userProfile = await getUserProfile();
       const token = userProfile?.token || "";
 
-      const response = await fetch(`${API_BASE_URL}/api/cart/remove/${removeTarget.id}`, {
-        method: "DELETE",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
+      const response = await fetch(
+        `${API_BASE_URL}/api/cart/remove/${removeTarget.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const json = await response.json();
       if (response.ok) {
@@ -362,32 +457,38 @@ export default function MyCartScreen() {
     setRemoveTarget(null);
   }, []);
 
-  const loadNearbyDrivers = useCallback(async (latitude: number, longitude: number) => {
-    setIsLoadingDrivers(true);
-    setSelectedDriverId(null);
-    try {
-      const userProfile = await getUserProfile();
-      const token = userProfile?.token || "";
+  const loadNearbyDrivers = useCallback(
+    async (latitude: number, longitude: number) => {
+      setIsLoadingDrivers(true);
+      setSelectedDriverId(null);
+      try {
+        const userProfile = await getUserProfile();
+        const token = userProfile?.token || "";
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/drivers/nearby?latitude=${latitude}&longitude=${longitude}`,
-        {
-          headers: { "Accept": "application/json", "Authorization": `Bearer ${token}` },
+        const response = await fetch(
+          `${API_BASE_URL}/api/drivers/nearby?latitude=${latitude}&longitude=${longitude}`,
+          {
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+        const json = await response.json();
+        if (response.ok) {
+          setNearbyDrivers(json.drivers || []);
+        } else {
+          setNearbyDrivers([]);
         }
-      );
-      const json = await response.json();
-      if (response.ok) {
-        setNearbyDrivers(json.drivers || []);
-      } else {
+      } catch (err) {
+        console.error("Failed to load nearby drivers:", err);
         setNearbyDrivers([]);
+      } finally {
+        setIsLoadingDrivers(false);
       }
-    } catch (err) {
-      console.error("Failed to load nearby drivers:", err);
-      setNearbyDrivers([]);
-    } finally {
-      setIsLoadingDrivers(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (deliveryTiming !== "asap") {
@@ -414,25 +515,35 @@ export default function MyCartScreen() {
     setRemoveTarget(product);
   }, []);
 
-  const handleDateChange = useCallback((event: DateTimePickerEvent, date?: Date) => {
-    setShowDatePicker(Platform.OS === "ios");
-    if (event.type === "dismissed" || !date) return;
-    setScheduledDate((current) => {
-      const updated = new Date(current);
-      updated.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-      return updated;
-    });
-  }, []);
+  const handleDateChange = useCallback(
+    (event: DateTimePickerEvent, date?: Date) => {
+      setShowDatePicker(Platform.OS === "ios");
+      if (event.type === "dismissed" || !date) return;
+      setScheduledDate((current) => {
+        const updated = new Date(current);
+        updated.setFullYear(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate(),
+        );
+        return updated;
+      });
+    },
+    [],
+  );
 
-  const handleTimeChange = useCallback((event: DateTimePickerEvent, date?: Date) => {
-    setShowTimePicker(Platform.OS === "ios");
-    if (event.type === "dismissed" || !date) return;
-    setScheduledDate((current) => {
-      const updated = new Date(current);
-      updated.setHours(date.getHours(), date.getMinutes(), 0, 0);
-      return updated;
-    });
-  }, []);
+  const handleTimeChange = useCallback(
+    (event: DateTimePickerEvent, date?: Date) => {
+      setShowTimePicker(Platform.OS === "ios");
+      if (event.type === "dismissed" || !date) return;
+      setScheduledDate((current) => {
+        const updated = new Date(current);
+        updated.setHours(date.getHours(), date.getMinutes(), 0, 0);
+        return updated;
+      });
+    },
+    [],
+  );
 
   const validateOrder = useCallback((): string | null => {
     if (cartLines.length === 0) {
@@ -462,7 +573,17 @@ export default function MyCartScreen() {
       return "Please select a driver for your ASAP delivery.";
     }
     return null;
-  }, [cartLines.length, selectedAddressId, paymentMethod, cardNumber, cardExpiry, cardCvv, cardHolder, deliveryTiming, selectedDriverId]);
+  }, [
+    cartLines.length,
+    selectedAddressId,
+    paymentMethod,
+    cardNumber,
+    cardExpiry,
+    cardCvv,
+    cardHolder,
+    deliveryTiming,
+    selectedDriverId,
+  ]);
 
   const handlePlaceOrder = useCallback(async () => {
     // ─── BUSINESS HOURS CHECK ───
@@ -481,7 +602,9 @@ export default function MyCartScreen() {
       return;
     }
 
-    const selectedAddress = addresses.find((address) => address.id === selectedAddressId);
+    const selectedAddress = addresses.find(
+      (address) => address.id === selectedAddressId,
+    );
     if (!selectedAddress || !paymentMethod) return;
 
     setIsPlacingOrder(true);
@@ -492,12 +615,15 @@ export default function MyCartScreen() {
         addressId: selectedAddressId,
         paymentMethod: paymentMethod,
         deliveryTiming: deliveryTiming,
-        deliveryDateTime: (deliveryTiming === "asap" ? new Date() : scheduledDate).toISOString(),
+        deliveryDateTime: (deliveryTiming === "asap"
+          ? new Date()
+          : scheduledDate
+        ).toISOString(),
         driverId: deliveryTiming === "asap" ? selectedDriverId : null,
-        cartItems: cartLines.map(line => ({
+        cartItems: cartLines.map((line) => ({
           productId: line.product.id,
           quantity: line.quantity,
-          price: line.product.price
+          price: line.product.price,
         })),
         subtotal: subtotal,
         deliveryFee: DELIVERY_FEE,
@@ -512,10 +638,10 @@ export default function MyCartScreen() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(orderPayload)
+        body: JSON.stringify(orderPayload),
       });
 
       const result = await response.json();
@@ -525,18 +651,32 @@ export default function MyCartScreen() {
         setCartItems([]);
         setShowSuccessModal(true);
       } else {
-        toastRef.current?.show({ 
-          message: result.message || "Failed to submit order to database.", 
-          type: "error" 
+        toastRef.current?.show({
+          message: result.message || "Failed to submit order to database.",
+          type: "error",
         });
       }
     } catch (err) {
       console.error("Order submit error:", err);
-      toastRef.current?.show({ message: "Network error saving order details.", type: "error" });
+      toastRef.current?.show({
+        message: "Network error saving order details.",
+        type: "error",
+      });
     } finally {
       setIsPlacingOrder(false);
     }
-  }, [validateOrder, addresses, selectedAddressId, paymentMethod, cartLines, deliveryTiming, scheduledDate, subtotal, total, selectedDriverId]);
+  }, [
+    validateOrder,
+    addresses,
+    selectedAddressId,
+    paymentMethod,
+    cartLines,
+    deliveryTiming,
+    scheduledDate,
+    subtotal,
+    total,
+    selectedDriverId,
+  ]);
 
   const handleContinueShopping = useCallback(() => {
     setShowSuccessModal(false);
@@ -562,37 +702,58 @@ export default function MyCartScreen() {
 
   const cartCount = useMemo(
     () => cartLines.reduce((sum, line) => sum + line.quantity, 0),
-    [cartLines]
+    [cartLines],
   );
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.white }]} edges={["top"]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: colors.white }]}
+      edges={["top"]}
+    >
       <View style={styles.header}>
-        <Pressable onPress={handleBack} style={styles.backButton} accessibilityLabel="Back to dashboard">
+        <Pressable
+          onPress={handleBack}
+          style={styles.backButton}
+          accessibilityLabel="Back to dashboard"
+        >
           <Ionicons name="chevron-back" size={22} color={colors.darkText} />
-          <Text style={[styles.backLabel, { color: colors.darkText }]}>Back</Text>
+          <Text style={[styles.backLabel, { color: colors.darkText }]}>
+            Back
+          </Text>
         </Pressable>
 
-        <Text style={[styles.headerTitle, { color: colors.darkText }]}>My Cart</Text>
+        <Text style={[styles.headerTitle, { color: colors.darkText }]}>
+          My Cart
+        </Text>
 
         <View style={styles.cartIconWrapper}>
           <Ionicons name="cart-outline" size={20} color={colors.darkText} />
           {cartCount > 0 && (
-            <View style={[styles.cartBadge, { backgroundColor: colors.goldAccent }]}>
-              <Text style={styles.cartBadgeText}>{cartCount > 99 ? "99+" : cartCount}</Text>
+            <View
+              style={[styles.cartBadge, { backgroundColor: colors.goldAccent }]}
+            >
+              <Text style={styles.cartBadgeText}>
+                {cartCount > 99 ? "99+" : cartCount}
+              </Text>
             </View>
           )}
         </View>
       </View>
 
       {isLoading ? (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
           <CartSkeleton colors={colors} />
         </ScrollView>
       ) : cartLines.length === 0 ? (
         <EmptyCart colors={colors} onStartShopping={handleStartShopping} />
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
           <View style={styles.section}>
             {cartLines.map((line, index) => (
               <CartLineCard
@@ -600,7 +761,9 @@ export default function MyCartScreen() {
                 line={line}
                 index={index}
                 colors={colors}
-                onIncrement={() => handleIncrement(line.product.id, line.quantity)}
+                onIncrement={() =>
+                  handleIncrement(line.product.id, line.quantity)
+                }
                 onDecrement={() => handleDecrement(line.product, line.quantity)}
                 onTrashPress={() => handleTrashPress(line.product)}
               />
@@ -657,7 +820,11 @@ export default function MyCartScreen() {
             onChangeCardHolder={setCardHolder}
           />
 
-          <PlaceOrderButton colors={colors} loading={isPlacingOrder} onPress={handlePlaceOrder} />
+          <PlaceOrderButton
+            colors={colors}
+            loading={isPlacingOrder}
+            onPress={handlePlaceOrder}
+          />
         </ScrollView>
       )}
 
@@ -672,7 +839,11 @@ export default function MyCartScreen() {
         />
       )}
       {Platform.OS !== "web" && showTimePicker && (
-        <DateTimePicker value={scheduledDate} mode="time" onChange={handleTimeChange} />
+        <DateTimePicker
+          value={scheduledDate}
+          mode="time"
+          onChange={handleTimeChange}
+        />
       )}
 
       {Platform.OS === "web" && (
@@ -750,7 +921,7 @@ const CartLineCard = React.memo(function CartLineCard({
   useEffect(() => {
     quantityScale.value = withSequence(
       withTiming(1.18, { duration: 100 }),
-      withTiming(1, { duration: 140 })
+      withTiming(1, { duration: 140 }),
     );
   }, [line.quantity, quantityScale]);
 
@@ -765,11 +936,18 @@ const CartLineCard = React.memo(function CartLineCard({
 
   return (
     <Animated.View
-      style={[styles.cartLineCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }, cardStyle]}
+      style={[
+        styles.cartLineCard,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+        cardStyle,
+      ]}
     >
       <View style={styles.cartLineImageWrapper}>
         {line.product.image ? (
-          <Animated.Image source={{ uri: line.product.image }} style={styles.cartLineImage} />
+          <Animated.Image
+            source={{ uri: line.product.image }}
+            style={styles.cartLineImage}
+          />
         ) : (
           <LinearGradient
             colors={["#0B2545", "#0D4A8C", "#1E5FAF"]}
@@ -785,16 +963,28 @@ const CartLineCard = React.memo(function CartLineCard({
       <View style={styles.cartLineBody}>
         <View style={styles.cartLineTitleRow}>
           <View style={styles.cartLineTitleColumn}>
-            <Text style={[styles.cartLineSize, { color: colors.goldAccent }]}>{line.product.size}</Text>
-            <Text style={[styles.cartLineName, { color: colors.darkText }]} numberOfLines={1}>
+            <Text style={[styles.cartLineSize, { color: colors.goldAccent }]}>
+              {line.product.size}
+            </Text>
+            <Text
+              style={[styles.cartLineName, { color: colors.darkText }]}
+              numberOfLines={1}
+            >
               {line.product.name}
             </Text>
-            <Text style={[styles.cartLineTagline, { color: colors.grayText }]} numberOfLines={1}>
+            <Text
+              style={[styles.cartLineTagline, { color: colors.grayText }]}
+              numberOfLines={1}
+            >
               {line.product.tagline}
             </Text>
           </View>
 
-          <Pressable onPress={onTrashPress} hitSlop={8} accessibilityLabel={"Remove " + line.product.name}>
+          <Pressable
+            onPress={onTrashPress}
+            hitSlop={8}
+            accessibilityLabel={"Remove " + line.product.name}
+          >
             <Ionicons name="trash-outline" size={18} color={colors.error} />
           </Pressable>
         </View>
@@ -809,7 +999,13 @@ const CartLineCard = React.memo(function CartLineCard({
               <Ionicons name="remove" size={16} color={colors.darkText} />
             </Pressable>
 
-            <Animated.Text style={[styles.stepperValue, { color: colors.darkText }, quantityStyle]}>
+            <Animated.Text
+              style={[
+                styles.stepperValue,
+                { color: colors.darkText },
+                quantityStyle,
+              ]}
+            >
               {line.quantity}
             </Animated.Text>
 
@@ -840,19 +1036,56 @@ type OrderSummaryCardProps = {
   total: number;
 };
 
-function OrderSummaryCard({ colors, subtotal, deliveryFee, serviceFee, discount, total }: OrderSummaryCardProps) {
+function OrderSummaryCard({
+  colors,
+  subtotal,
+  deliveryFee,
+  serviceFee,
+  discount,
+  total,
+}: OrderSummaryCardProps) {
   return (
-    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>Order Summary</Text>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>
+        Order Summary
+      </Text>
 
-      <SummaryRow label="Subtotal" value={formatNaira(subtotal)} colors={colors} />
-      <SummaryRow label="Delivery Fee" value={formatNaira(deliveryFee)} colors={colors} />
-      <SummaryRow label="Service Fee" value={formatNaira(serviceFee)} colors={colors} />
-      <SummaryRow label="Discount" value={"-" + formatNaira(discount)} colors={colors} />
+      <SummaryRow
+        label="Subtotal"
+        value={formatNaira(subtotal)}
+        colors={colors}
+      />
+      <SummaryRow
+        label="Delivery Fee"
+        value={formatNaira(deliveryFee)}
+        colors={colors}
+      />
+      <SummaryRow
+        label="Service Fee"
+        value={formatNaira(serviceFee)}
+        colors={colors}
+      />
+      <SummaryRow
+        label="Discount"
+        value={"-" + formatNaira(discount)}
+        colors={colors}
+      />
 
-      <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+      <View
+        style={[styles.summaryDivider, { backgroundColor: colors.border }]}
+      />
 
-      <SummaryRow label="Total" value={formatNaira(total)} colors={colors} isTotal />
+      <SummaryRow
+        label="Total"
+        value={formatNaira(total)}
+        colors={colors}
+        isTotal
+      />
     </View>
   );
 }
@@ -910,8 +1143,15 @@ function DeliveryTimingCard({
   onPressTime,
 }: DeliveryTimingCardProps) {
   return (
-    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>Delivery</Text>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>
+        Delivery
+      </Text>
 
       <RadioRow
         label="ASAP"
@@ -930,21 +1170,51 @@ function DeliveryTimingCard({
         <View style={styles.scheduleRow}>
           <Pressable
             onPress={onPressDate}
-            style={[styles.scheduleButton, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+            style={[
+              styles.scheduleButton,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border,
+              },
+            ]}
           >
-            <Ionicons name="calendar-outline" size={16} color={colors.primaryBlue} />
-            <Text style={[styles.scheduleButtonText, { color: colors.darkText }]}>
-              {scheduledDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            <Ionicons
+              name="calendar-outline"
+              size={16}
+              color={colors.primaryBlue}
+            />
+            <Text
+              style={[styles.scheduleButtonText, { color: colors.darkText }]}
+            >
+              {scheduledDate.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+              })}
             </Text>
           </Pressable>
 
           <Pressable
             onPress={onPressTime}
-            style={[styles.scheduleButton, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+            style={[
+              styles.scheduleButton,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border,
+              },
+            ]}
           >
-            <Ionicons name="time-outline" size={16} color={colors.primaryBlue} />
-            <Text style={[styles.scheduleButtonText, { color: colors.darkText }]}>
-              {scheduledDate.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+            <Ionicons
+              name="time-outline"
+              size={16}
+              color={colors.primaryBlue}
+            />
+            <Text
+              style={[styles.scheduleButtonText, { color: colors.darkText }]}
+            >
+              {scheduledDate.toLocaleTimeString(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
             </Text>
           </Pressable>
         </View>
@@ -972,7 +1242,10 @@ function RadioRow({
 }) {
   const innerScale = useSharedValue(isSelected ? 1 : 0);
   useEffect(() => {
-    innerScale.value = withSpring(isSelected ? 1 : 0, { damping: 14, stiffness: 240 });
+    innerScale.value = withSpring(isSelected ? 1 : 0, {
+      damping: 14,
+      stiffness: 240,
+    });
   }, [isSelected, innerScale]);
 
   const innerStyle = useAnimatedStyle(() => ({
@@ -987,9 +1260,17 @@ function RadioRow({
           { borderColor: isSelected ? colors.primaryBlue : colors.border },
         ]}
       >
-        <Animated.View style={[styles.radioInner, { backgroundColor: colors.primaryBlue }, innerStyle]} />
+        <Animated.View
+          style={[
+            styles.radioInner,
+            { backgroundColor: colors.primaryBlue },
+            innerStyle,
+          ]}
+        />
       </View>
-      <Text style={[styles.radioLabel, { color: colors.darkText }]}>{label}</Text>
+      <Text style={[styles.radioLabel, { color: colors.darkText }]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -1019,13 +1300,22 @@ function DeliveryAddressCard({
   onAddAddress,
 }: DeliveryAddressCardProps) {
   return (
-    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>Delivery Address</Text>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>
+        Delivery Address
+      </Text>
 
       {addresses.map((address) => {
         const isSelected = address.id === selectedAddressId;
         const label =
-          address.label === "Custom" && address.customLabel ? address.customLabel : address.label;
+          address.label === "Custom" && address.customLabel
+            ? address.customLabel
+            : address.label;
 
         return (
           <Pressable
@@ -1034,25 +1324,48 @@ function DeliveryAddressCard({
             style={[
               styles.addressRow,
               {
-                backgroundColor: isSelected ? colors.inputBackground : "transparent",
+                backgroundColor: isSelected
+                  ? colors.inputBackground
+                  : "transparent",
                 borderColor: isSelected ? colors.primaryBlue : colors.border,
               },
             ]}
           >
-            <Ionicons name={ADDRESS_ICONS[address.label] ?? "location"} size={18} color={isSelected ? colors.primaryBlue : colors.grayText} />
+            <Ionicons
+              name={ADDRESS_ICONS[address.label] ?? "location"}
+              size={18}
+              color={isSelected ? colors.primaryBlue : colors.grayText}
+            />
             <View style={styles.addressTextColumn}>
-              <Text style={[styles.addressLabel, { color: colors.darkText }]}>{label}</Text>
-              <Text style={[styles.addressDetail, { color: colors.grayText }]} numberOfLines={1}>
+              <Text style={[styles.addressLabel, { color: colors.darkText }]}>
+                {label}
+              </Text>
+              <Text
+                style={[styles.addressDetail, { color: colors.grayText }]}
+                numberOfLines={1}
+              >
                 {address.address}
               </Text>
             </View>
-            {isSelected && <Ionicons name="checkmark-circle" size={18} color={colors.primaryBlue} />}
+            {isSelected && (
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={colors.primaryBlue}
+              />
+            )}
           </Pressable>
         );
       })}
       <Pressable onPress={onAddAddress} style={styles.addAddressRow}>
-        <Ionicons name="add-circle-outline" size={18} color={colors.primaryBlue} />
-        <Text style={[styles.addAddressText, { color: colors.primaryBlue }]}>Add New Address</Text>
+        <Ionicons
+          name="add-circle-outline"
+          size={18}
+          color={colors.primaryBlue}
+        />
+        <Text style={[styles.addAddressText, { color: colors.primaryBlue }]}>
+          Add New Address
+        </Text>
       </Pressable>
     </View>
   );
@@ -1074,24 +1387,54 @@ function DriverSelectionCard({
   isLoading,
 }: DriverSelectionCardProps) {
   return (
-    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>Choose Your Driver</Text>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>
+        Choose Your Driver
+      </Text>
 
       {isLoading ? (
         <View style={styles.driverEmptyState}>
-          <View style={[styles.driverEmptyIconCircle, { backgroundColor: colors.inputBackground }]}>
-            <Ionicons name="search-outline" size={26} color={colors.primaryBlue} />
+          <View
+            style={[
+              styles.driverEmptyIconCircle,
+              { backgroundColor: colors.inputBackground },
+            ]}
+          >
+            <Ionicons
+              name="search-outline"
+              size={26}
+              color={colors.primaryBlue}
+            />
           </View>
-          <Text style={[styles.driverEmptyTitle, { color: colors.darkText }]}>Finding drivers nearby...</Text>
+          <Text style={[styles.driverEmptyTitle, { color: colors.darkText }]}>
+            Finding drivers nearby...
+          </Text>
         </View>
       ) : drivers.length === 0 ? (
         <View style={styles.driverEmptyState}>
-          <View style={[styles.driverEmptyIconCircle, { backgroundColor: colors.inputBackground }]}>
-            <Ionicons name="bicycle-outline" size={26} color={colors.grayText} />
+          <View
+            style={[
+              styles.driverEmptyIconCircle,
+              { backgroundColor: colors.inputBackground },
+            ]}
+          >
+            <Ionicons
+              name="bicycle-outline"
+              size={26}
+              color={colors.grayText}
+            />
           </View>
-          <Text style={[styles.driverEmptyTitle, { color: colors.darkText }]}>No Drivers Nearby</Text>
+          <Text style={[styles.driverEmptyTitle, { color: colors.darkText }]}>
+            No Drivers Nearby
+          </Text>
           <Text style={[styles.driverEmptyText, { color: colors.grayText }]}>
-            No drivers are currently online near this address. Try again shortly, or switch to Schedule Delivery.
+            No drivers are currently online near this address. Try again
+            shortly, or switch to Schedule Delivery.
           </Text>
         </View>
       ) : (
@@ -1104,7 +1447,9 @@ function DriverSelectionCard({
               style={[
                 styles.addressRow,
                 {
-                  backgroundColor: isSelected ? colors.inputBackground : "transparent",
+                  backgroundColor: isSelected
+                    ? colors.inputBackground
+                    : "transparent",
                   borderColor: isSelected ? colors.primaryBlue : colors.border,
                 },
               ]}
@@ -1115,12 +1460,24 @@ function DriverSelectionCard({
                 color={isSelected ? colors.primaryBlue : colors.grayText}
               />
               <View style={styles.addressTextColumn}>
-                <Text style={[styles.addressLabel, { color: colors.darkText }]}>{driver.fullName}</Text>
-                <Text style={[styles.addressDetail, { color: colors.grayText }]} numberOfLines={1}>
-                  {driver.vehicle} · {driver.distanceKm.toFixed(1)} km away · ~{driver.etaMinutes} min
+                <Text style={[styles.addressLabel, { color: colors.darkText }]}>
+                  {driver.fullName}
+                </Text>
+                <Text
+                  style={[styles.addressDetail, { color: colors.grayText }]}
+                  numberOfLines={1}
+                >
+                  {driver.vehicle} · {driver.distanceKm.toFixed(1)} km away · ~
+                  {driver.etaMinutes} min
                 </Text>
               </View>
-              {isSelected && <Ionicons name="checkmark-circle" size={18} color={colors.primaryBlue} />}
+              {isSelected && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={18}
+                  color={colors.primaryBlue}
+                />
+              )}
             </Pressable>
           );
         })
@@ -1157,11 +1514,30 @@ function PaymentMethodCard({
   onChangeCardHolder,
 }: PaymentMethodCardProps) {
   return (
-    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>Payment Method</Text>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
+    >
+      <Text style={[styles.cardSectionTitle, { color: colors.darkText }]}>
+        Payment Method
+      </Text>
       <View style={styles.paymentOptionsRow}>
-        <PaymentOption icon="cash-outline" label="Cash On Delivery" isSelected={paymentMethod === "cash"} colors={colors} onPress={() => onSelectPaymentMethod("cash")} />
-        <PaymentOption icon="card-outline" label="Card Payment" isSelected={paymentMethod === "card"} colors={colors} onPress={() => onSelectPaymentMethod("card")} />
+        <PaymentOption
+          icon="cash-outline"
+          label="Cash On Delivery"
+          isSelected={paymentMethod === "cash"}
+          colors={colors}
+          onPress={() => onSelectPaymentMethod("cash")}
+        />
+        <PaymentOption
+          icon="card-outline"
+          label="Card Payment"
+          isSelected={paymentMethod === "card"}
+          colors={colors}
+          onPress={() => onSelectPaymentMethod("card")}
+        />
       </View>
       {paymentMethod === "card" && (
         <DemoCardForm
@@ -1195,7 +1571,10 @@ function PaymentOption({
 }) {
   const scale = useSharedValue(1);
   useEffect(() => {
-    scale.value = withSpring(isSelected ? 1.03 : 1, { damping: 16, stiffness: 220 });
+    scale.value = withSpring(isSelected ? 1.03 : 1, {
+      damping: 16,
+      stiffness: 220,
+    });
   }, [isSelected, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -1209,13 +1588,24 @@ function PaymentOption({
         style={[
           styles.paymentOption,
           {
-            backgroundColor: isSelected ? colors.inputBackground : "transparent",
+            backgroundColor: isSelected
+              ? colors.inputBackground
+              : "transparent",
             borderColor: isSelected ? colors.primaryBlue : colors.border,
           },
         ]}
       >
-        <Ionicons name={icon} size={22} color={isSelected ? colors.primaryBlue : colors.grayText} />
-        <Text style={[styles.paymentOptionLabel, { color: isSelected ? colors.primaryBlue : colors.darkText }]}>
+        <Ionicons
+          name={icon}
+          size={22}
+          color={isSelected ? colors.primaryBlue : colors.grayText}
+        />
+        <Text
+          style={[
+            styles.paymentOptionLabel,
+            { color: isSelected ? colors.primaryBlue : colors.darkText },
+          ]}
+        >
           {label}
         </Text>
       </Pressable>
@@ -1259,61 +1649,180 @@ function DemoCardForm({
 
   const handleExpiryChange = (text: string) => {
     const digitsOnly = text.replace(/\D/g, "").slice(0, 4);
-    const formatted = digitsOnly.length > 2 ? digitsOnly.slice(0, 2) + "/" + digitsOnly.slice(2) : digitsOnly;
+    const formatted =
+      digitsOnly.length > 2
+        ? digitsOnly.slice(0, 2) + "/" + digitsOnly.slice(2)
+        : digitsOnly;
     onChangeCardExpiry(formatted);
   };
 
   return (
     <Animated.View style={[styles.cardForm, animatedStyle]}>
-      <Text style={[styles.inputLabel, { color: colors.grayText }]}>Card Number</Text>
-      <TextInput value={cardNumber} onChangeText={handleCardNumberChange} placeholder="1234 5678 9012 3456" placeholderTextColor={colors.placeholder} keyboardType="number-pad" style={[styles.cardInput, { backgroundColor: colors.inputBackground, color: colors.darkText, borderColor: colors.border }]} />
+      <Text style={[styles.inputLabel, { color: colors.grayText }]}>
+        Card Number
+      </Text>
+      <TextInput
+        value={cardNumber}
+        onChangeText={handleCardNumberChange}
+        placeholder="1234 5678 9012 3456"
+        placeholderTextColor={colors.placeholder}
+        keyboardType="number-pad"
+        style={[
+          styles.cardInput,
+          {
+            backgroundColor: colors.inputBackground,
+            color: colors.darkText,
+            borderColor: colors.border,
+          },
+        ]}
+      />
       <View style={styles.cardFormRow}>
         <View style={styles.cardFormHalf}>
-          <Text style={[styles.inputLabel, { color: colors.grayText }]}>Expiry</Text>
-          <TextInput value={cardExpiry} onChangeText={handleExpiryChange} placeholder="MM/YY" placeholderTextColor={colors.placeholder} keyboardType="number-pad" style={[styles.cardInput, { backgroundColor: colors.inputBackground, color: colors.darkText, borderColor: colors.border }]} />
+          <Text style={[styles.inputLabel, { color: colors.grayText }]}>
+            Expiry
+          </Text>
+          <TextInput
+            value={cardExpiry}
+            onChangeText={handleExpiryChange}
+            placeholder="MM/YY"
+            placeholderTextColor={colors.placeholder}
+            keyboardType="number-pad"
+            style={[
+              styles.cardInput,
+              {
+                backgroundColor: colors.inputBackground,
+                color: colors.darkText,
+                borderColor: colors.border,
+              },
+            ]}
+          />
         </View>
         <View style={styles.cardFormHalf}>
-          <Text style={[styles.inputLabel, { color: colors.grayText }]}>CVV</Text>
-          <TextInput value={cardCvv} onChangeText={(text) => onChangeCardCvv(text.replace(/\D/g, "").slice(0, 4))} placeholder="123" placeholderTextColor={colors.placeholder} keyboardType="number-pad" secureTextEntry style={[styles.cardInput, { backgroundColor: colors.inputBackground, color: colors.darkText, borderColor: colors.border }]} />
+          <Text style={[styles.inputLabel, { color: colors.grayText }]}>
+            CVV
+          </Text>
+          <TextInput
+            value={cardCvv}
+            onChangeText={(text) =>
+              onChangeCardCvv(text.replace(/\D/g, "").slice(0, 4))
+            }
+            placeholder="123"
+            placeholderTextColor={colors.placeholder}
+            keyboardType="number-pad"
+            secureTextEntry
+            style={[
+              styles.cardInput,
+              {
+                backgroundColor: colors.inputBackground,
+                color: colors.darkText,
+                borderColor: colors.border,
+              },
+            ]}
+          />
         </View>
       </View>
-      <Text style={[styles.inputLabel, { color: colors.grayText }]}>Card Holder</Text>
-      <TextInput value={cardHolder} onChangeText={onChangeCardHolder} placeholder="Name on card" placeholderTextColor={colors.placeholder} autoCapitalize="words" style={[styles.cardInput, { backgroundColor: colors.inputBackground, color: colors.darkText, borderColor: colors.border }]} />
+      <Text style={[styles.inputLabel, { color: colors.grayText }]}>
+        Card Holder
+      </Text>
+      <TextInput
+        value={cardHolder}
+        onChangeText={onChangeCardHolder}
+        placeholder="Name on card"
+        placeholderTextColor={colors.placeholder}
+        autoCapitalize="words"
+        style={[
+          styles.cardInput,
+          {
+            backgroundColor: colors.inputBackground,
+            color: colors.darkText,
+            borderColor: colors.border,
+          },
+        ]}
+      />
     </Animated.View>
   );
 }
 
-function PlaceOrderButton({ colors, loading, onPress, }: { colors: ThemeColors; loading: boolean; onPress: () => void; }) {
+function PlaceOrderButton({
+  colors,
+  loading,
+  onPress,
+}: {
+  colors: ThemeColors;
+  loading: boolean;
+  onPress: () => void;
+}) {
   const scale = useSharedValue(1);
-  const handlePressIn = useCallback(() => { scale.value = withTiming(0.97, { duration: 120 }); }, [scale]);
-  const handlePressOut = useCallback(() => { scale.value = withTiming(1, { duration: 160 }); }, [scale]);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], }));
+  const handlePressIn = useCallback(() => {
+    scale.value = withTiming(0.97, { duration: 120 });
+  }, [scale]);
+  const handlePressOut = useCallback(() => {
+    scale.value = withTiming(1, { duration: 160 });
+  }, [scale]);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   return (
     <Animated.View style={animatedStyle}>
-      <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut} disabled={loading} style={[styles.placeOrderButton, { backgroundColor: colors.primaryBlue, opacity: loading ? 0.7 : 1 }]} >
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={loading}
+        style={[
+          styles.placeOrderButton,
+          { backgroundColor: colors.primaryBlue, opacity: loading ? 0.7 : 1 },
+        ]}
+      >
         <Ionicons name="cart" size={18} color="#FFFFFF" />
-        <Text style={styles.placeOrderText}>{loading ? "Placing Order..." : "Place Order"}</Text>
+        <Text style={styles.placeOrderText}>
+          {loading ? "Placing Order..." : "Place Order"}
+        </Text>
       </Pressable>
     </Animated.View>
   );
 }
 
-function OffDutyModal({ visible, colors, onClose }: { visible: boolean; colors: ThemeColors; onClose: () => void }) {
+function OffDutyModal({
+  visible,
+  colors,
+  onClose,
+}: {
+  visible: boolean;
+  colors: ThemeColors;
+  onClose: () => void;
+}) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.confirmModalCard, { backgroundColor: colors.white }]}>
-          <View style={[styles.confirmIconCircle, { backgroundColor: "#F59E0B1A" }]}>
+        <View
+          style={[styles.confirmModalCard, { backgroundColor: colors.white }]}
+        >
+          <View
+            style={[styles.confirmIconCircle, { backgroundColor: "#F59E0B1A" }]}
+          >
             <Ionicons name="moon-outline" size={26} color="#F59E0B" />
           </View>
-          <Text style={[styles.confirmTitle, { color: colors.darkText }]}>Our Drivers Are Off Duty</Text>
+          <Text style={[styles.confirmTitle, { color: colors.darkText }]}>
+            Our Drivers Are Off Duty
+          </Text>
           <Text style={[styles.confirmSubtitle, { color: colors.grayText }]}>
-            {"We're open daily from " + formatBusinessHoursLabel() + ". Please place your order during these hours, or choose a delivery time that falls within them."}
+            {"We're open daily from " +
+              formatBusinessHoursLabel() +
+              ". Please place your order during these hours, or choose a delivery time that falls within them."}
           </Text>
           <Pressable
             onPress={onClose}
-            style={[styles.confirmRemoveButton, { backgroundColor: colors.primaryBlue, width: "100%" }]}
+            style={[
+              styles.confirmRemoveButton,
+              { backgroundColor: colors.primaryBlue, width: "100%" },
+            ]}
           >
             <Text style={styles.confirmRemoveText}>Got It</Text>
           </Pressable>
@@ -1323,29 +1832,60 @@ function OffDutyModal({ visible, colors, onClose }: { visible: boolean; colors: 
   );
 }
 
-function RemoveConfirmationModal({ product, colors, onCancel, onConfirm, }: { product: Product | null; colors: ThemeColors; onCancel: () => void; onConfirm: () => void; }) {
+function RemoveConfirmationModal({
+  product,
+  colors,
+  onCancel,
+  onConfirm,
+}: {
+  product: Product | null;
+  colors: ThemeColors;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
   return (
-    <Modal visible={product !== null} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal
+      visible={product !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
       <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.confirmModalCard, { backgroundColor: colors.white }]}>
-          <View style={[styles.confirmIconCircle, { backgroundColor: colors.error + "14" }]}>
+        <View
+          style={[styles.confirmModalCard, { backgroundColor: colors.white }]}
+        >
+          <View
+            style={[
+              styles.confirmIconCircle,
+              { backgroundColor: colors.error + "14" },
+            ]}
+          >
             <Ionicons name="trash-outline" size={28} color={colors.error} />
           </View>
           <Text style={[styles.confirmTitle, { color: colors.darkText }]}>
             Remove <Text style={{ fontWeight: "800" }}>{product?.name}</Text>?
           </Text>
           <Text style={[styles.confirmSubtitle, { color: colors.grayText }]}>
-            It'll be removed from your cart, but you can always add it back later.
+            It'll be removed from your cart, but you can always add it back
+            later.
           </Text>
           <View style={styles.confirmButtonsRow}>
             <Pressable
               onPress={onCancel}
               style={({ pressed }) => [
                 styles.confirmCancelButton,
-                { borderColor: colors.border, backgroundColor: colors.inputBackground, opacity: pressed ? 0.7 : 1 },
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBackground,
+                  opacity: pressed ? 0.7 : 1,
+                },
               ]}
             >
-              <Text style={[styles.confirmCancelText, { color: colors.darkText }]}>Cancel</Text>
+              <Text
+                style={[styles.confirmCancelText, { color: colors.darkText }]}
+              >
+                Cancel
+              </Text>
             </Pressable>
             <Pressable
               onPress={onConfirm}
@@ -1364,37 +1904,92 @@ function RemoveConfirmationModal({ product, colors, onCancel, onConfirm, }: { pr
   );
 }
 
-function SuccessModal({ visible, colors, onContinueShopping, onViewOrders, }: { visible: boolean; colors: ThemeColors; onContinueShopping: () => void; onViewOrders: () => void; }) {
+function SuccessModal({
+  visible,
+  colors,
+  onContinueShopping,
+  onViewOrders,
+}: {
+  visible: boolean;
+  colors: ThemeColors;
+  onContinueShopping: () => void;
+  onViewOrders: () => void;
+}) {
   const scale = useSharedValue(0.85);
   const checkScale = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
       scale.value = withSpring(1, { damping: 14, stiffness: 180 });
-      checkScale.value = withSequence(withTiming(0, { duration: 0 }), withSpring(1, { damping: 10, stiffness: 160 }));
+      checkScale.value = withSequence(
+        withTiming(0, { duration: 0 }),
+        withSpring(1, { damping: 10, stiffness: 160 }),
+      );
     } else {
       scale.value = 0.85;
       checkScale.value = 0;
     }
   }, [visible, scale, checkScale]);
 
-  const modalStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], }));
-  const checkStyle = useAnimatedStyle(() => ({ transform: [{ scale: checkScale.value }], }));
+  const modalStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const checkStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkScale.value }],
+  }));
 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-        <Animated.View style={[styles.successModalCard, { backgroundColor: colors.white }, modalStyle]}>
-          <Animated.View style={[styles.successIconCircle, { backgroundColor: colors.success + "1A" }, checkStyle]}>
-            <Ionicons name="checkmark-circle" size={56} color={colors.success} />
+        <Animated.View
+          style={[
+            styles.successModalCard,
+            { backgroundColor: colors.white },
+            modalStyle,
+          ]}
+        >
+          <Animated.View
+            style={[
+              styles.successIconCircle,
+              { backgroundColor: colors.success + "1A" },
+              checkStyle,
+            ]}
+          >
+            <Ionicons
+              name="checkmark-circle"
+              size={56}
+              color={colors.success}
+            />
           </Animated.View>
-          <Text style={[styles.successTitle, { color: colors.darkText }]}>Order Successfully Placed</Text>
-          <Text style={[styles.successSubtitle, { color: colors.grayText }]}> Your Kayora Premium Water order has been received.{"\n"} We&apos;ll notify you once your order is confirmed. </Text>
-          <Pressable onPress={onContinueShopping} style={[styles.successPrimaryButton, { backgroundColor: colors.primaryBlue }]} >
+          <Text style={[styles.successTitle, { color: colors.darkText }]}>
+            Order Successfully Placed
+          </Text>
+          <Text style={[styles.successSubtitle, { color: colors.grayText }]}>
+            {" "}
+            Your Kayora Premium Water order has been received.{"\n"} We&apos;ll
+            notify you once your order is confirmed.{" "}
+          </Text>
+          <Pressable
+            onPress={onContinueShopping}
+            style={[
+              styles.successPrimaryButton,
+              { backgroundColor: colors.primaryBlue },
+            ]}
+          >
             <Text style={styles.successPrimaryText}>Continue Shopping</Text>
           </Pressable>
-          <Pressable onPress={onViewOrders} style={styles.successSecondaryButton}>
-            <Text style={[styles.successSecondaryText, { color: colors.primaryBlue }]}>View Orders</Text>
+          <Pressable
+            onPress={onViewOrders}
+            style={styles.successSecondaryButton}
+          >
+            <Text
+              style={[
+                styles.successSecondaryText,
+                { color: colors.primaryBlue },
+              ]}
+            >
+              View Orders
+            </Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -1402,15 +1997,38 @@ function SuccessModal({ visible, colors, onContinueShopping, onViewOrders, }: { 
   );
 }
 
-function EmptyCart({ colors, onStartShopping }: { colors: ThemeColors; onStartShopping: () => void }) {
+function EmptyCart({
+  colors,
+  onStartShopping,
+}: {
+  colors: ThemeColors;
+  onStartShopping: () => void;
+}) {
   return (
     <View style={styles.emptyCartContainer}>
-      <View style={[styles.emptyCartIconCircle, { backgroundColor: colors.inputBackground }]}>
+      <View
+        style={[
+          styles.emptyCartIconCircle,
+          { backgroundColor: colors.inputBackground },
+        ]}
+      >
         <Ionicons name="cart-outline" size={40} color={colors.grayText} />
       </View>
-      <Text style={[styles.emptyCartTitle, { color: colors.darkText }]}>Your Cart is Empty</Text>
-      <Text style={[styles.emptyCartSubtitle, { color: colors.grayText }]}> Look like you haven&apos;t added any clean premium hydration products to your cart yet. </Text>
-      <Pressable onPress={onStartShopping} style={[styles.emptyCartButton, { backgroundColor: colors.primaryBlue }]}>
+      <Text style={[styles.emptyCartTitle, { color: colors.darkText }]}>
+        Your Cart is Empty
+      </Text>
+      <Text style={[styles.emptyCartSubtitle, { color: colors.grayText }]}>
+        {" "}
+        Look like you haven&apos;t added any clean premium hydration products to
+        your cart yet.{" "}
+      </Text>
+      <Pressable
+        onPress={onStartShopping}
+        style={[
+          styles.emptyCartButton,
+          { backgroundColor: colors.primaryBlue },
+        ]}
+      >
         <Text style={styles.emptyCartButtonText}>Start Shopping</Text>
       </Pressable>
     </View>
@@ -1432,8 +2050,12 @@ function WebDateTimeFallback({
   onClose: () => void;
   onConfirm: (date: Date) => void;
 }) {
-  const [dateValue, setDateValue] = useState(() => toDateInputValue(initialDate));
-  const [timeValue, setTimeValue] = useState(() => toTimeInputValue(initialDate));
+  const [dateValue, setDateValue] = useState(() =>
+    toDateInputValue(initialDate),
+  );
+  const [timeValue, setTimeValue] = useState(() =>
+    toTimeInputValue(initialDate),
+  );
 
   useEffect(() => {
     setDateValue(toDateInputValue(initialDate));
@@ -1453,8 +2075,15 @@ function WebDateTimeFallback({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={[webPickerStyles.overlay, { backgroundColor: colors.overlay }]}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={[webPickerStyles.overlay, { backgroundColor: colors.overlay }]}
+      >
         <View style={[webPickerStyles.card, { backgroundColor: colors.white }]}>
           <Text style={[webPickerStyles.title, { color: colors.darkText }]}>
             {mode === "date" ? "Select Delivery Date" : "Select Delivery Time"}
@@ -1478,10 +2107,26 @@ function WebDateTimeFallback({
           )}
 
           <View style={webPickerStyles.buttonsRow}>
-            <Pressable onPress={onClose} style={[webPickerStyles.cancelButton, { borderColor: colors.border }]}>
-              <Text style={[webPickerStyles.cancelText, { color: colors.darkText }]}>Cancel</Text>
+            <Pressable
+              onPress={onClose}
+              style={[
+                webPickerStyles.cancelButton,
+                { borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[webPickerStyles.cancelText, { color: colors.darkText }]}
+              >
+                Cancel
+              </Text>
             </Pressable>
-            <Pressable onPress={handleConfirm} style={[webPickerStyles.confirmButton, { backgroundColor: colors.primaryBlue }]}>
+            <Pressable
+              onPress={handleConfirm}
+              style={[
+                webPickerStyles.confirmButton,
+                { backgroundColor: colors.primaryBlue },
+              ]}
+            >
               <Text style={webPickerStyles.confirmText}>Confirm</Text>
             </Pressable>
           </View>
@@ -1518,96 +2163,356 @@ const webPickerStyles = StyleSheet.create({
   card: { width: 320, padding: 24, borderRadius: 16 },
   title: { fontSize: 16, fontWeight: "700", marginBottom: 16 },
   buttonsRow: { flexDirection: "row", gap: 10, marginTop: 4 },
-  cancelButton: { flex: 1, height: 44, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  cancelButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cancelText: { fontSize: 14, fontWeight: "600" },
-  confirmButton: { flex: 1, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  confirmButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   confirmText: { fontSize: 14, fontWeight: "700", color: "#FFFFFF" },
 });
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
+  header: {
+    height: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
   backButton: { flexDirection: "row", alignItems: "center" },
   backLabel: { fontSize: 15, marginLeft: 4, fontWeight: "600" },
   headerTitle: { fontSize: 17, fontWeight: "700" },
-  cartIconWrapper: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  cartBadge: { position: "absolute", right: -2, top: -2, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: "center", justifyContent: "center" },
+  cartIconWrapper: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cartBadge: {
+    position: "absolute",
+    right: -2,
+    top: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cartBadgeText: { fontSize: 10, color: "#FFFFFF", fontWeight: "700" },
   scrollContent: { paddingBottom: 32 },
   section: { paddingHorizontal: 16, marginTop: 12 },
-  cartLineCard: { flexDirection: "row", padding: 12, borderRadius: 14, borderWidth: 1, marginBottom: 12 },
-  cartLineImageWrapper: { width: 72, height: 72, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  cartLineImage: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
+  cartLineCard: {
+    flexDirection: "row",
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  cartLineImageWrapper: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cartLineImage: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cartLineBody: { flex: 1, marginLeft: 12, justifyContent: "space-between" },
-  cartLineTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  cartLineTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
   cartLineTitleColumn: { flex: 1, paddingRight: 8 },
-  cartLineSize: { fontSize: 11, fontWeight: "700", textTransform: "uppercase", marginBottom: 2 },
+  cartLineSize: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
   cartLineName: { fontSize: 15, fontWeight: "700", marginBottom: 2 },
   cartLineTagline: { fontSize: 12 },
-  cartLineFooterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  cartLineFooterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   quantityStepper: { flexDirection: "row", alignItems: "center" },
-  stepperButton: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  stepperValue: { fontSize: 14, fontWeight: "700", marginHorizontal: 12, minWidth: 16, textAlign: "center" },
+  stepperButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepperValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginHorizontal: 12,
+    minWidth: 16,
+    textAlign: "center",
+  },
   cartLineSubtotal: { fontSize: 15, fontWeight: "700" },
-  card: { marginHorizontal: 16, padding: 16, borderRadius: 14, borderWidth: 1, marginTop: 12 },
+  card: {
+    marginHorizontal: 16,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 12,
+  },
   cardSectionTitle: { fontSize: 15, fontWeight: "700", marginBottom: 12 },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   summaryLabel: { fontSize: 13 },
   summaryLabelTotal: { fontSize: 14, fontWeight: "700" },
   summaryValue: { fontSize: 13, fontWeight: "600" },
   summaryValueTotal: { fontSize: 16, fontWeight: "800" },
   summaryDivider: { height: 1, marginVertical: 8 },
   radioRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  radioOuter: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
   radioInner: { width: 10, height: 10, borderRadius: 5 },
   radioLabel: { fontSize: 14, fontWeight: "600" },
   scheduleRow: { flexDirection: "row", marginTop: 4, marginBottom: 8 },
-  scheduleButton: { flex: 1, height: 38, borderRadius: 8, borderWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", marginRight: 8 },
+  scheduleButton: {
+    flex: 1,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
   scheduleButtonText: { fontSize: 13, fontWeight: "600", marginLeft: 6 },
   scheduleSummary: { fontSize: 12, fontWeight: "500" },
-  addressRow: { flexDirection: "row", alignItems: "center", padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 8 },
+  addressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
   addressTextColumn: { flex: 1, marginLeft: 10, paddingRight: 8 },
   addressLabel: { fontSize: 14, fontWeight: "700", marginBottom: 1 },
   addressDetail: { fontSize: 12 },
-  addAddressRow: { flexDirection: "row", alignItems: "center", marginTop: 6, paddingVertical: 4 },
+  addAddressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+    paddingVertical: 4,
+  },
   addAddressText: { fontSize: 13, fontWeight: "700", marginLeft: 6 },
-  driverEmptyState: { alignItems: "center", justifyContent: "center", paddingVertical: 20, paddingHorizontal: 12 },
-  driverEmptyIconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  driverEmptyTitle: { fontSize: 14, fontWeight: "700", marginBottom: 4, textAlign: "center" },
+  driverEmptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+  },
+  driverEmptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  driverEmptyTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 4,
+    textAlign: "center",
+  },
   driverEmptyText: { fontSize: 13, lineHeight: 19, textAlign: "center" },
   paymentOptionsRow: { flexDirection: "row", marginHorizontal: -4 },
   paymentOptionWrapper: { flex: 1, paddingHorizontal: 4 },
-  paymentOption: { height: 48, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center", flexDirection: "row" },
+  paymentOption: {
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+  },
   paymentOptionLabel: { fontSize: 12, fontWeight: "700", marginLeft: 8 },
   cardForm: { marginTop: 14 },
-  inputLabel: { fontSize: 12, fontWeight: "600", marginBottom: 4, marginTop: 10 },
-  cardInput: { height: 44, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, fontSize: 14 },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 4,
+    marginTop: 10,
+  },
+  cardInput: {
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
   cardFormRow: { flexDirection: "row", marginHorizontal: -6 },
   cardFormHalf: { flex: 1, paddingHorizontal: 6 },
-  placeOrderButton: { marginHorizontal: 16, height: 50, borderRadius: 25, flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 24 },
-  placeOrderText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800", marginLeft: 8 },
+  placeOrderButton: {
+    marginHorizontal: 16,
+    height: 50,
+    borderRadius: 25,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 24,
+  },
+  placeOrderText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+    marginLeft: 8,
+  },
   modalOverlay: { flex: 1, alignItems: "center", justifyContent: "center" },
-  confirmModalCard: { width: "85%", padding: 20, borderRadius: 16, alignItems: "center" },
-  confirmIconCircle: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 14 },
-  confirmTitle: { fontSize: 16, fontWeight: "700", textAlign: "center", marginBottom: 6 },
+  confirmModalCard: {
+    width: "85%",
+    padding: 20,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  confirmIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  confirmTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 6,
+  },
   confirmSubtitle: { fontSize: 13, textAlign: "center", marginBottom: 18 },
   confirmButtonsRow: { flexDirection: "row", marginHorizontal: -6 },
-  confirmCancelButton: { flex: 1, height: 40, borderRadius: 20, borderWidth: 1, alignItems: "center", justifyContent: "center", marginHorizontal: 6 },
+  confirmCancelButton: {
+    flex: 1,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 6,
+  },
   confirmCancelText: { fontSize: 14, fontWeight: "600" },
-  confirmRemoveButton: { flex: 1, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginHorizontal: 6 },
+  confirmRemoveButton: {
+    flex: 1,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 6,
+  },
   confirmRemoveText: { color: "#FFFFFF", fontSize: 14, fontWeight: "600" },
-  successModalCard: { width: "85%", padding: 24, borderRadius: 20, alignItems: "center" },
-  successIconCircle: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center", marginBottom: 20 },
-  successTitle: { fontSize: 19, fontWeight: "800", textAlign: "center", marginBottom: 8 },
-  successSubtitle: { fontSize: 13, textAlign: "center", lineHeight: 19, marginBottom: 24 },
-  successPrimaryButton: { width: "100%", height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  successModalCard: {
+    width: "85%",
+    padding: 24,
+    borderRadius: 20,
+    alignItems: "center",
+  },
+  successIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  successSubtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 19,
+    marginBottom: 24,
+  },
+  successPrimaryButton: {
+    width: "100%",
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
   successPrimaryText: { fontSize: 15, fontWeight: "800", color: "#FFFFFF" },
-  successSecondaryButton: { width: "100%", height: 44, alignItems: "center", justifyContent: "center" },
+  successSecondaryButton: {
+    width: "100%",
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   successSecondaryText: { fontSize: 14, fontWeight: "700" },
-  emptyCartContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, marginTop: 80 },
-  emptyCartIconCircle: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center", marginBottom: 18 },
-  emptyCartTitle: { fontSize: 18, fontWeight: "800", marginBottom: 6, textAlign: "center" },
-  emptyCartSubtitle: { fontSize: 13, textAlign: "center", lineHeight: 19, marginBottom: 24 },
-  emptyCartButton: { paddingHorizontal: 24, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  emptyCartContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    marginTop: 80,
+  },
+  emptyCartIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  emptyCartTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  emptyCartSubtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 19,
+    marginBottom: 24,
+  },
+  emptyCartButton: {
+    paddingHorizontal: 24,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   emptyCartButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
 });

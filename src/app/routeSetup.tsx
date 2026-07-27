@@ -1,33 +1,57 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View, Platform } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    FlatList,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  Easing as ReanimatedEasing,
+    Easing as ReanimatedEasing,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { SearchLocation } from "@/components/SearchLocation";
-import { LocationCard } from "@/components/LocationCard";
-import { PrimaryButton } from "@/components/PrimaryButton";
 import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
-import { MapLocationPicker, MapLocationPickerResult } from "@/components/MapLocationPicker.web";
+import { LocationCard } from "@/components/LocationCard";
+import {
+    MapLocationPicker,
+    MapLocationPickerResult,
+} from "@/components/MapLocationPicker.web";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { SearchLocation } from "@/components/SearchLocation";
 import { Colors } from "@/constants/colors";
-import { AddressLabelType, AddressSuggestion, SavedAddress } from "@/types/location";
+import {
+    AddressLabelType,
+    AddressSuggestion,
+    SavedAddress,
+} from "@/types/location";
 
 // IMPORT UPDATED STORAGE LAYOUT
 import {
-  getSavedAddresses,
-  getUserProfile,
-  saveAddressesToStorage,
-  setRouteSetupComplete,
+    getSavedAddresses,
+    getUserProfile,
+    saveAddressesToStorage,
+    setRouteSetupComplete,
 } from "@/services/storage";
 
-const LABEL_OPTIONS: AddressLabelType[] = ["Home", "Work", "School", "Parents", "Shop", "Custom"];
-const API_BASE_URL = Platform.OS === "android" ? "http://10.0.2.2:8000" : "http://localhost:8000";
+const LABEL_OPTIONS: AddressLabelType[] = [
+  "Home",
+  "Work",
+  "School",
+  "Parents",
+  "Shop",
+  "Custom",
+];
+const API_BASE_URL =
+  Platform.OS === "android"
+    ? "http://10.0.2.2:8000"
+    : "https://kayorabackend-production.up.railway.app";
 
 function generateId(): string {
   return `addr_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
@@ -36,7 +60,8 @@ function generateId(): string {
 export default function RouteSetupScreen() {
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [selectedLabel, setSelectedLabel] = useState<AddressLabelType>("Home");
-  const [pendingSuggestion, setPendingSuggestion] = useState<AddressSuggestion | null>(null);
+  const [pendingSuggestion, setPendingSuggestion] =
+    useState<AddressSuggestion | null>(null);
   const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -81,27 +106,33 @@ export default function RouteSetupScreen() {
     };
   }, []);
 
-  const handleSelectSuggestion = useCallback((suggestion: AddressSuggestion) => {
-    setPendingSuggestion(suggestion);
-  }, []);
+  const handleSelectSuggestion = useCallback(
+    (suggestion: AddressSuggestion) => {
+      setPendingSuggestion(suggestion);
+    },
+    [],
+  );
 
-  const handleMapPickerConfirm = useCallback((result: MapLocationPickerResult) => {
-    // Same shape as an AddressSuggestion from the search box, so this just
-    // slots into the exact same pendingSuggestion state and "Add Address"
-    // button flow below — no separate save path needed.
-    setPendingSuggestion({
-      title: result.title,
-      subtitle: result.subtitle,
-      latitude: result.latitude,
-      longitude: result.longitude,
-    });
-    setMapPickerVisible(false);
-    toastRef.current?.show({
-      message: "Location pinned — tap Add Address to save it",
-      type: "success",
-      duration: 2200,
-    });
-  }, []);
+  const handleMapPickerConfirm = useCallback(
+    (result: MapLocationPickerResult) => {
+      // Same shape as an AddressSuggestion from the search box, so this just
+      // slots into the exact same pendingSuggestion state and "Add Address"
+      // button flow below — no separate save path needed.
+      setPendingSuggestion({
+        title: result.title,
+        subtitle: result.subtitle,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      });
+      setMapPickerVisible(false);
+      toastRef.current?.show({
+        message: "Location pinned — tap Add Address to save it",
+        type: "success",
+        duration: 2200,
+      });
+    },
+    [],
+  );
 
   const handleAddAddress = useCallback(async () => {
     if (!pendingSuggestion) {
@@ -125,8 +156,8 @@ export default function RouteSetupScreen() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Authorization": `Bearer ${token}`,
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             label: selectedLabel,
@@ -141,12 +172,16 @@ export default function RouteSetupScreen() {
           backendSyncedAddress = data.address;
         }
       } catch (e) {
-        console.warn("Backend address sync failed, writing to client storage only.");
+        console.warn(
+          "Backend address sync failed, writing to client storage only.",
+        );
       }
 
       // 3. Fallback to client mapping storage
       const newAddress: SavedAddress = {
-        id: backendSyncedAddress?.id ? String(backendSyncedAddress.id) : generateId(),
+        id: backendSyncedAddress?.id
+          ? String(backendSyncedAddress.id)
+          : generateId(),
         label: selectedLabel,
         address: `${pendingSuggestion.title}, ${pendingSuggestion.subtitle}`,
         latitude: pendingSuggestion.latitude,
@@ -172,11 +207,14 @@ export default function RouteSetupScreen() {
     }
   }, [pendingSuggestion, selectedLabel, addresses]);
 
-  const handleRemoveAddress = useCallback(async (id: string) => {
-    const updatedList = addresses.filter(item => item.id !== id);
-    await saveAddressesToStorage(updatedList);
-    setAddresses(updatedList);
-  }, [addresses]);
+  const handleRemoveAddress = useCallback(
+    async (id: string) => {
+      const updatedList = addresses.filter((item) => item.id !== id);
+      await saveAddressesToStorage(updatedList);
+      setAddresses(updatedList);
+    },
+    [addresses],
+  );
 
   const handleFinishSetup = useCallback(async () => {
     if (addresses.length === 0) {
@@ -214,7 +252,11 @@ export default function RouteSetupScreen() {
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <Animated.View style={[styles.container, containerStyle]}>
         <View style={styles.header}>
-          <Pressable onPress={handleClose} hitSlop={10} accessibilityLabel="Close">
+          <Pressable
+            onPress={handleClose}
+            hitSlop={10}
+            accessibilityLabel="Close"
+          >
             <Ionicons name="close" size={24} color={Colors.darkText} />
           </Pressable>
           <Text style={styles.headerTitle}>Your route</Text>
@@ -231,7 +273,12 @@ export default function RouteSetupScreen() {
                 onPress={() => setSelectedLabel(label)}
                 style={[styles.chip, isSelected && styles.chipSelected]}
               >
-                <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    isSelected && styles.chipTextSelected,
+                  ]}
+                >
                   {label}
                 </Text>
               </Pressable>
@@ -250,7 +297,10 @@ export default function RouteSetupScreen() {
             here or via search both just populate pendingSuggestion — the
             small preview chip below and the "Add Address" button downstream
             don't care which path produced it. */}
-        <Pressable onPress={() => setMapPickerVisible(true)} style={styles.mapPickButton}>
+        <Pressable
+          onPress={() => setMapPickerVisible(true)}
+          style={styles.mapPickButton}
+        >
           <Ionicons name="map-outline" size={18} color={Colors.primaryBlue} />
           <Text style={styles.mapPickButtonText}>Pinpoint on Map</Text>
         </Pressable>
@@ -280,7 +330,9 @@ export default function RouteSetupScreen() {
         />
 
         <Text style={styles.sectionLabel}>
-          {addresses.length > 0 ? `Saved addresses (${addresses.length})` : "No addresses added yet"}
+          {addresses.length > 0
+            ? `Saved addresses (${addresses.length})`
+            : "No addresses added yet"}
         </Text>
 
         <FlatList
@@ -288,10 +340,14 @@ export default function RouteSetupScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => <LocationCard address={item} onRemove={handleRemoveAddress} />}
+          renderItem={({ item }) => (
+            <LocationCard address={item} onRemove={handleRemoveAddress} />
+          )}
           ListEmptyComponent={
             !isLoadingInitial ? (
-              <Text style={styles.emptyListText}>Addresses you add will appear here.</Text>
+              <Text style={styles.emptyListText}>
+                Addresses you add will appear here.
+              </Text>
             ) : null
           }
         />
@@ -320,13 +376,39 @@ export default function RouteSetupScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.white },
   container: { flex: 1, paddingHorizontal: 20, paddingTop: 12 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
   headerTitle: { fontSize: 18, fontWeight: "700", color: Colors.darkText },
   headerSpacer: { width: 24 },
-  sectionLabel: { fontSize: 13, fontWeight: "600", color: Colors.grayText, marginBottom: 10, marginTop: 4 },
-  labelChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 18 },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.inputBackground, borderWidth: 1.5, borderColor: Colors.border },
-  chipSelected: { backgroundColor: Colors.lightBlue, borderColor: Colors.primaryBlue },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.grayText,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  labelChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 18,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.inputBackground,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  chipSelected: {
+    backgroundColor: Colors.lightBlue,
+    borderColor: Colors.primaryBlue,
+  },
   chipText: { fontSize: 13, fontWeight: "600", color: Colors.grayText },
   chipTextSelected: { color: Colors.primaryBlue },
   searchSection: { marginBottom: 14, zIndex: 10 },
@@ -341,7 +423,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.primaryBlue,
     marginBottom: 14,
   },
-  mapPickButtonText: { fontSize: 13.5, fontWeight: "700", color: Colors.primaryBlue },
+  mapPickButtonText: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: Colors.primaryBlue,
+  },
   pendingPreview: {
     flexDirection: "row",
     alignItems: "center",
@@ -350,10 +436,23 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 14,
   },
-  pendingPreviewTitle: { fontSize: 13, fontWeight: "700", color: Colors.darkText },
-  pendingPreviewSubtitle: { fontSize: 11.5, color: Colors.grayText, marginTop: 1 },
+  pendingPreviewTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.darkText,
+  },
+  pendingPreviewSubtitle: {
+    fontSize: 11.5,
+    color: Colors.grayText,
+    marginTop: 1,
+  },
   addButton: { marginBottom: 20 },
   listContent: { paddingBottom: 12 },
-  emptyListText: { fontSize: 13, color: Colors.grayText, textAlign: "center", paddingVertical: 16 },
+  emptyListText: {
+    fontSize: 13,
+    color: Colors.grayText,
+    textAlign: "center",
+    paddingVertical: 16,
+  },
   finishButton: { marginTop: 8, marginBottom: 12 },
 });

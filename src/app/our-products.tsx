@@ -1,38 +1,62 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  Platform,
-  useWindowDimensions,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
+import {
+    ActivityIndicator,
+    FlatList,
+    Platform,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    useWindowDimensions,
+    View,
+} from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-  withSpring,
-  Easing as ReanimatedEasing,
+    Easing as ReanimatedEasing,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withSpring,
+    withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useTheme } from "@/hooks/useTheme";
-import { Product } from "@/constants/products";
-import { addToCart, getUserProfile } from "@/services/storage";
 import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
+import { Product } from "@/constants/products";
+import { useTheme } from "@/hooks/useTheme";
+import { addToCart, getUserProfile } from "@/services/storage";
 
-type FilterChipKey = "All" | "30cl" | "50cl" | "75cl" | "18.9L" | "Newest" | "Popular";
+type FilterChipKey =
+  | "All"
+  | "30cl"
+  | "50cl"
+  | "75cl"
+  | "18.9L"
+  | "Newest"
+  | "Popular";
 
-const FILTER_CHIPS: FilterChipKey[] = ["All", "30cl", "50cl", "75cl", "18.9L", "Newest", "Popular"];
-const API_BASE_URL = Platform.OS === "android" ? "http://10.0.2.2:8000" : "http://localhost:8000";
+const FILTER_CHIPS: FilterChipKey[] = [
+  "All",
+  "30cl",
+  "50cl",
+  "75cl",
+  "18.9L",
+  "Newest",
+  "Popular",
+];
+const API_BASE_URL =
+  Platform.OS === "android"
+    ? "http://10.0.2.2:8000"
+    : "https://kayorabackend-production.up.railway.app";
 
 function getColumnCount(width: number): number {
   if (width >= 1024) return 4;
@@ -48,11 +72,15 @@ function applyFilter(products: Product[], chip: FilterChipKey): Product[] {
     case "50cl":
     case "75cl":
     case "18.9L":
-      return products.filter((product) => product.category === chip || product.size === chip);
+      return products.filter(
+        (product) => product.category === chip || product.size === chip,
+      );
     case "Newest":
       return [...products].sort((a, b) => b.id - a.id);
     case "Popular":
-      return products.filter((product) => product.isPopular || product.is_popular);
+      return products.filter(
+        (product) => product.isPopular || product.is_popular,
+      );
     default:
       return products;
   }
@@ -72,7 +100,7 @@ export default function OurProductsScreen() {
 
   const toastRef = useRef<AnimatedToastRef>(null);
 
-// 1. Fetch products from Laravel Backend
+  // 1. Fetch products from Laravel Backend
   const fetchProducts = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
     try {
@@ -82,14 +110,14 @@ export default function OurProductsScreen() {
 
       const response = await fetch(`${API_BASE_URL}/api/products`, {
         headers: {
-          "Accept": "application/json",
+          Accept: "application/json",
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`, // <-- Pass token here to satisfy route authentication
-        }
+          Authorization: `Bearer ${token}`, // <-- Pass token here to satisfy route authentication
+        },
       });
-      
+
       const data = await response.json();
-      
+
       if (response.ok) {
         if (data && typeof data === "object" && "products" in data) {
           setProducts(Array.isArray(data.products) ? data.products : []);
@@ -99,7 +127,9 @@ export default function OurProductsScreen() {
           setProducts([]);
         }
       } else {
-        throw new Error(data?.message || "Unauthenticated or server error status");
+        throw new Error(
+          data?.message || "Unauthenticated or server error status",
+        );
       }
     } catch (error) {
       console.error("Product parse error details:", error);
@@ -125,8 +155,10 @@ export default function OurProductsScreen() {
 
     return byChip.filter((product) => {
       const haystack = (
-        (product.name || "") + " " + 
-        (product.size || "") + " " + 
+        (product.name || "") +
+        " " +
+        (product.size || "") +
+        " " +
         (product.tagline || "")
       ).toLowerCase();
       return haystack.includes(query);
@@ -156,8 +188,8 @@ export default function OurProductsScreen() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           product_id: product.id,
@@ -201,18 +233,32 @@ export default function OurProductsScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.white }]} edges={["top"]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: colors.white }]}
+      edges={["top"]}
+    >
       <View style={styles.header}>
-        <Pressable onPress={handleBack} style={styles.backButton} accessibilityLabel="Back to dashboard">
+        <Pressable
+          onPress={handleBack}
+          style={styles.backButton}
+          accessibilityLabel="Back to dashboard"
+        >
           <Ionicons name="chevron-back" size={22} color={colors.darkText} />
-          <Text style={[styles.backLabel, { color: colors.darkText }]}>Back</Text>
+          <Text style={[styles.backLabel, { color: colors.darkText }]}>
+            Back
+          </Text>
         </Pressable>
 
-        <Text style={[styles.headerTitle, { color: colors.darkText }]}>Our Products</Text>
+        <Text style={[styles.headerTitle, { color: colors.darkText }]}>
+          Our Products
+        </Text>
 
         <Pressable
           onPress={handleCartPress}
-          style={[styles.cartButton, { backgroundColor: colors.inputBackground }]}
+          style={[
+            styles.cartButton,
+            { backgroundColor: colors.inputBackground },
+          ]}
           accessibilityLabel="Open cart"
         >
           <Ionicons name="cart-outline" size={18} color={colors.darkText} />
@@ -220,8 +266,21 @@ export default function OurProductsScreen() {
       </View>
 
       <View style={styles.searchWrapper}>
-        <View style={[styles.searchBar, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-          <Ionicons name="search" size={18} color={colors.grayText} style={styles.searchIcon} />
+        <View
+          style={[
+            styles.searchBar,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Ionicons
+            name="search"
+            size={18}
+            color={colors.grayText}
+            style={styles.searchIcon}
+          />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -277,7 +336,9 @@ export default function OurProductsScreen() {
               colors={[colors.primaryBlue]}
             />
           }
-          ListEmptyComponent={<EmptyState colors={colors} query={searchQuery} />}
+          ListEmptyComponent={
+            <EmptyState colors={colors} query={searchQuery} />
+          }
           renderItem={({ item, index }) => (
             <ProductGridCard
               product={item}
@@ -306,11 +367,19 @@ type FilterChipProps = {
   onPress: () => void;
 };
 
-const FilterChip = React.memo(function FilterChip({ label, isActive, colors, onPress }: FilterChipProps) {
+const FilterChip = React.memo(function FilterChip({
+  label,
+  isActive,
+  colors,
+  onPress,
+}: FilterChipProps) {
   const scale = useSharedValue(1);
 
   React.useEffect(() => {
-    scale.value = withSpring(isActive ? 1.04 : 1, { damping: 16, stiffness: 220 });
+    scale.value = withSpring(isActive ? 1.04 : 1, {
+      damping: 16,
+      stiffness: 220,
+    });
   }, [isActive]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -324,12 +393,19 @@ const FilterChip = React.memo(function FilterChip({ label, isActive, colors, onP
         style={[
           styles.chip,
           {
-            backgroundColor: isActive ? colors.primaryBlue : colors.inputBackground,
+            backgroundColor: isActive
+              ? colors.primaryBlue
+              : colors.inputBackground,
             borderColor: isActive ? colors.primaryBlue : colors.border,
           },
         ]}
       >
-        <Text style={[styles.chipText, { color: isActive ? colors.white : colors.grayText }]}>
+        <Text
+          style={[
+            styles.chipText,
+            { color: isActive ? colors.white : colors.grayText },
+          ]}
+        >
           {label}
         </Text>
       </Pressable>
@@ -365,7 +441,10 @@ const ProductGridCard = React.memo(function ProductGridCard({
     const easing = ReanimatedEasing.out(ReanimatedEasing.cubic);
     const delay = Math.min(index, 10) * 55;
     opacity.value = withDelay(delay, withTiming(1, { duration: 380 }));
-    translateY.value = withDelay(delay, withTiming(0, { duration: 380, easing }));
+    translateY.value = withDelay(
+      delay,
+      withTiming(0, { duration: 380, easing }),
+    );
   }, [index]);
 
   const handleCardPressIn = useCallback(() => {
@@ -401,11 +480,20 @@ const ProductGridCard = React.memo(function ProductGridCard({
         onPress={onSeeDetails}
         onPressIn={handleCardPressIn}
         onPressOut={handleCardPressOut}
-        style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.cardBackground,
+            borderColor: colors.border,
+          },
+        ]}
       >
         <View style={styles.cardImageWrapper}>
           {imageUri ? (
-            <Animated.Image source={{ uri: imageUri }} style={styles.cardImage} />
+            <Animated.Image
+              source={{ uri: imageUri }}
+              style={styles.cardImage}
+            />
           ) : (
             <LinearGradient
               colors={["#0B2545", "#0D4A8C", "#1E5FAF"]}
@@ -417,26 +505,50 @@ const ProductGridCard = React.memo(function ProductGridCard({
             </LinearGradient>
           )}
 
-          <View style={[styles.sizeBadge, { backgroundColor: colors.goldAccent }]}>
+          <View
+            style={[styles.sizeBadge, { backgroundColor: colors.goldAccent }]}
+          >
             <Text style={styles.sizeBadgeText}>{product.size}</Text>
           </View>
         </View>
 
         <View style={styles.cardBody}>
           <View style={styles.cardTitleRow}>
-            <Text style={[styles.cardName, { color: colors.darkText }]} numberOfLines={1}>
+            <Text
+              style={[styles.cardName, { color: colors.darkText }]}
+              numberOfLines={1}
+            >
               {product.name}
             </Text>
             {(product.isAvailable || product.stock_count > 0) && (
-              <View style={[styles.availabilityBadge, { backgroundColor: colors.success + "1A" }]}>
-                <View style={[styles.availabilityDot, { backgroundColor: colors.success }]} />
-                <Text style={[styles.availabilityText, { color: colors.success }]}>Available</Text>
+              <View
+                style={[
+                  styles.availabilityBadge,
+                  { backgroundColor: colors.success + "1A" },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.availabilityDot,
+                    { backgroundColor: colors.success },
+                  ]}
+                />
+                <Text
+                  style={[styles.availabilityText, { color: colors.success }]}
+                >
+                  Available
+                </Text>
               </View>
             )}
           </View>
 
-          <Text style={[styles.cardTagline, { color: colors.goldAccent }]}>{product.tagline}</Text>
-          <Text style={[styles.cardDescription, { color: colors.grayText }]} numberOfLines={2}>
+          <Text style={[styles.cardTagline, { color: colors.goldAccent }]}>
+            {product.tagline}
+          </Text>
+          <Text
+            style={[styles.cardDescription, { color: colors.grayText }]}
+            numberOfLines={2}
+          >
             {product.shortDescription || product.description}
           </Text>
 
@@ -446,8 +558,14 @@ const ProductGridCard = React.memo(function ProductGridCard({
 
           <View style={styles.cardActions}>
             <Pressable onPress={onSeeDetails} style={styles.seeDetailsButton}>
-              <Text style={[styles.seeDetails, { color: colors.primaryBlue }]}>See Details</Text>
-              <Ionicons name="arrow-forward" size={12} color={colors.primaryBlue} />
+              <Text style={[styles.seeDetails, { color: colors.primaryBlue }]}>
+                See Details
+              </Text>
+              <Ionicons
+                name="arrow-forward"
+                size={12}
+                color={colors.primaryBlue}
+              />
             </Pressable>
 
             <Animated.View style={addButtonStyle}>
@@ -456,7 +574,10 @@ const ProductGridCard = React.memo(function ProductGridCard({
                 onPressIn={handleAddPressIn}
                 onPressOut={handleAddPressOut}
                 disabled={isAddingToCart}
-                style={[styles.addToCartButton, { backgroundColor: colors.goldAccent }]}
+                style={[
+                  styles.addToCartButton,
+                  { backgroundColor: colors.goldAccent },
+                ]}
                 accessibilityLabel={"Add " + product.name + " to cart"}
               >
                 <Ionicons name="add" size={14} color="#FFFFFF" />
@@ -483,12 +604,21 @@ function EmptyState({ colors, query }: { colors: ThemeColors; query: string }) {
 
   return (
     <Animated.View style={[styles.emptyState, animatedStyle]}>
-      <View style={[styles.emptyIconCircle, { backgroundColor: colors.inputBackground }]}>
+      <View
+        style={[
+          styles.emptyIconCircle,
+          { backgroundColor: colors.inputBackground },
+        ]}
+      >
         <Ionicons name="search" size={32} color={colors.grayText} />
       </View>
-      <Text style={[styles.emptyTitle, { color: colors.darkText }]}>No products found.</Text>
+      <Text style={[styles.emptyTitle, { color: colors.darkText }]}>
+        No products found.
+      </Text>
       <Text style={[styles.emptySubtitle, { color: colors.grayText }]}>
-        {query ? "Try another product name or bottle size." : "No products match the selected filter."}
+        {query
+          ? "Try another product name or bottle size."
+          : "No products match the selected filter."}
       </Text>
     </Animated.View>
   );
@@ -496,44 +626,147 @@ function EmptyState({ colors, query }: { colors: ThemeColors; query: string }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  backButton: { flexDirection: "row", alignItems: "center", gap: 2, minWidth: 64 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    minWidth: 64,
+  },
   backLabel: { fontSize: 15, fontWeight: "600" },
   headerTitle: { fontSize: 17, fontWeight: "800" },
-  cartButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  cartButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   searchWrapper: { paddingHorizontal: 20, paddingBottom: 12 },
-  searchBar: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 14, height: 48 },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 48,
+  },
   searchIcon: { marginRight: 10 },
   searchInput: { flex: 1, fontSize: 15, height: "100%" },
   chipsWrapper: { paddingBottom: 14 },
   chipsContent: { paddingHorizontal: 20, gap: 8 },
-  chip: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, marginRight: 8 },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    marginRight: 8,
+  },
   chipText: { fontSize: 13, fontWeight: "700" },
   listContent: { paddingHorizontal: 20, paddingBottom: 40 },
   row: { gap: 12 },
   cardOuter: { marginBottom: 14 },
-  card: { borderRadius: 18, borderWidth: 1, overflow: "hidden", shadowColor: "#0D4A8C", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 14, elevation: 2 },
+  card: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+    shadowColor: "#0D4A8C",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 2,
+  },
   cardImageWrapper: { width: "100%", height: 110, position: "relative" },
-  cardImage: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  sizeBadge: { position: "absolute", top: 8, left: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  sizeBadgeText: { fontSize: 10, fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.5 },
+  cardImage: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sizeBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  sizeBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
   cardBody: { padding: 12 },
-  cardTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 6 },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+    gap: 6,
+  },
   cardName: { fontSize: 16, fontWeight: "800", flexShrink: 1 },
-  availabilityBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  availabilityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
   availabilityDot: { width: 5, height: 5, borderRadius: 2.5 },
   availabilityText: { fontSize: 9, fontWeight: "700" },
-  cardTagline: { fontSize: 11, fontWeight: "600", fontStyle: "italic", marginBottom: 6 },
+  cardTagline: {
+    fontSize: 11,
+    fontWeight: "600",
+    fontStyle: "italic",
+    marginBottom: 6,
+  },
   cardDescription: { fontSize: 11, lineHeight: 15, marginBottom: 8 },
   cardPrice: { fontSize: 15, fontWeight: "800", marginBottom: 10 },
-  cardActions: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cardActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   seeDetailsButton: { flexDirection: "row", alignItems: "center", gap: 3 },
   seeDetails: { fontSize: 12, fontWeight: "700" },
-  addToCartButton: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  addToCartButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
   addToCartText: { fontSize: 12, fontWeight: "700", color: "#FFFFFF" },
-  emptyState: { alignItems: "center", paddingVertical: 80, paddingHorizontal: 32, gap: 12 },
-  emptyIconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
   emptyTitle: { fontSize: 17, fontWeight: "700" },
   emptySubtitle: { fontSize: 13, textAlign: "center", lineHeight: 18 },
-  loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 60 }
+  loaderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
 });

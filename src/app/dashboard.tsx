@@ -3,23 +3,23 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    useWindowDimensions,
+    View,
 } from "react-native";
 import Animated, {
-  Easing as ReanimatedEasing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSpring,
-  withTiming,
+    Easing as ReanimatedEasing,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withSpring,
+    withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -44,7 +44,9 @@ const TABS: TabConfig[] = [
 ];
 
 const API_BASE_URL =
-  Platform.OS === "android" ? "http://127.0.0.1:8000" : "http://localhost:8000";
+  Platform.OS === "android"
+    ? "http://127.0.0.1:8000"
+    : "https://kayorabackend-production.up.railway.app";
 
 function getColumnCount(width: number): number {
   if (width >= 1024) return 4;

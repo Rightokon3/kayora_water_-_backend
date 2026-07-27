@@ -8,6 +8,7 @@ import { ActivityIndicator, View } from "react-native";
 
 import { getUserProfile } from "@/services/storage";
 import { Colors } from "@/constants/colors";
+import { OfflineGate } from "../components/OfflineGate";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -45,6 +46,7 @@ export default function RootLayout() {
   }
 
   return (
+     <OfflineGate>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
@@ -54,5 +56,6 @@ export default function RootLayout() {
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+    </OfflineGate>
   );
 }

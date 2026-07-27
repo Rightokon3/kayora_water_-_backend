@@ -1,40 +1,40 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+    ActivityIndicator,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming,
-  Easing as ReanimatedEasing,
+    Easing as ReanimatedEasing,
+    useAnimatedStyle,
+    useSharedValue,
+    withDelay,
+    withRepeat,
+    withSequence,
+    withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useTheme } from "@/hooks/useTheme";
-import { BottomTabBar } from "@/components/BottomTabBar";
 import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
-import { getUserProfile, deleteAllUserData } from "@/services/storage";
+import { BottomTabBar } from "@/components/BottomTabBar";
+import { useTheme } from "@/hooks/useTheme";
+import { deleteAllUserData, getUserProfile } from "@/services/storage";
 
 type ThemeColors = ReturnType<typeof useTheme>["colors"];
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "https://kayorabackend-production.up.railway.app";
 
 const DELETE_REASONS = [
   "I no longer use Kayora.",
@@ -69,11 +69,17 @@ function SkeletonBlock({
   useEffect(() => {
     pulse.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 700, easing: ReanimatedEasing.inOut(ReanimatedEasing.ease) }),
-        withTiming(0.4, { duration: 700, easing: ReanimatedEasing.inOut(ReanimatedEasing.ease) })
+        withTiming(1, {
+          duration: 700,
+          easing: ReanimatedEasing.inOut(ReanimatedEasing.ease),
+        }),
+        withTiming(0.4, {
+          duration: 700,
+          easing: ReanimatedEasing.inOut(ReanimatedEasing.ease),
+        }),
       ),
       -1,
-      true
+      true,
     );
   }, []);
 
@@ -97,12 +103,29 @@ function SkeletonBlock({
 
 function SkeletonProfileCard({ colors }: { colors: ThemeColors }) {
   return (
-    <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.sectionCard,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
+    >
       <View style={styles.profileRow}>
         <SkeletonBlock width={60} height={60} radius={30} colors={colors} />
         <View style={styles.profileInfo}>
-          <SkeletonBlock width={120} height={16} radius={4} colors={colors} style={{ marginBottom: 8 }} />
-          <SkeletonBlock width={160} height={12} radius={4} colors={colors} style={{ marginBottom: 6 }} />
+          <SkeletonBlock
+            width={120}
+            height={16}
+            radius={4}
+            colors={colors}
+            style={{ marginBottom: 8 }}
+          />
+          <SkeletonBlock
+            width={160}
+            height={12}
+            radius={4}
+            colors={colors}
+            style={{ marginBottom: 6 }}
+          />
           <SkeletonBlock width={110} height={12} radius={4} colors={colors} />
         </View>
       </View>
@@ -111,19 +134,45 @@ function SkeletonProfileCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
-function SkeletonListCard({ rows, colors }: { rows: number; colors: ThemeColors }) {
+function SkeletonListCard({
+  rows,
+  colors,
+}: {
+  rows: number;
+  colors: ThemeColors;
+}) {
   return (
-    <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.sectionCard,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
+    >
       {Array.from({ length: rows }).map((_, i) => (
         <View key={i}>
           <View style={styles.skeletonRow}>
             <View style={{ flex: 1 }}>
-              <SkeletonBlock width="60%" height={14} radius={4} colors={colors} style={{ marginBottom: 6 }} />
-              <SkeletonBlock width="85%" height={11} radius={4} colors={colors} />
+              <SkeletonBlock
+                width="60%"
+                height={14}
+                radius={4}
+                colors={colors}
+                style={{ marginBottom: 6 }}
+              />
+              <SkeletonBlock
+                width="85%"
+                height={11}
+                radius={4}
+                colors={colors}
+              />
             </View>
             <SkeletonBlock width={38} height={22} radius={11} colors={colors} />
           </View>
-          {i < rows - 1 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
+          {i < rows - 1 && (
+            <View
+              style={[styles.divider, { backgroundColor: colors.border }]}
+            />
+          )}
         </View>
       ))}
     </View>
@@ -134,11 +183,29 @@ function SettingsSkeleton({ colors }: { colors: ThemeColors }) {
   return (
     <View>
       <SkeletonProfileCard colors={colors} />
-      <SkeletonBlock width={100} height={11} radius={4} colors={colors} style={{ marginTop: 20, marginBottom: 8 }} />
+      <SkeletonBlock
+        width={100}
+        height={11}
+        radius={4}
+        colors={colors}
+        style={{ marginTop: 20, marginBottom: 8 }}
+      />
       <SkeletonListCard rows={2} colors={colors} />
-      <SkeletonBlock width={110} height={11} radius={4} colors={colors} style={{ marginTop: 20, marginBottom: 8 }} />
+      <SkeletonBlock
+        width={110}
+        height={11}
+        radius={4}
+        colors={colors}
+        style={{ marginTop: 20, marginBottom: 8 }}
+      />
       <SkeletonListCard rows={3} colors={colors} />
-      <SkeletonBlock width={100} height={11} radius={4} colors={colors} style={{ marginTop: 20, marginBottom: 8 }} />
+      <SkeletonBlock
+        width={100}
+        height={11}
+        radius={4}
+        colors={colors}
+        style={{ marginTop: 20, marginBottom: 8 }}
+      />
       <View style={[styles.dangerCard, { borderColor: colors.border }]}>
         <View style={styles.skeletonRow}>
           <View style={{ flex: 1 }}>
@@ -173,8 +240,12 @@ export default function SettingsScreen() {
 
   // Avatar state
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
-  const [pendingPictureUri, setPendingPictureUri] = useState<string | null>(null);
-  const [pendingPictureBase64, setPendingPictureBase64] = useState<string | null>(null);
+  const [pendingPictureUri, setPendingPictureUri] = useState<string | null>(
+    null,
+  );
+  const [pendingPictureBase64, setPendingPictureBase64] = useState<
+    string | null
+  >(null);
   const [shouldRemovePicture, setShouldRemovePicture] = useState(false);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
 
@@ -182,7 +253,8 @@ export default function SettingsScreen() {
 
   // App Toggles
   const [orderNotifications, setOrderNotifications] = useState(true);
-  const [newProductsNotifications, setNewProductsNotifications] = useState(true);
+  const [newProductsNotifications, setNewProductsNotifications] =
+    useState(true);
 
   // Loading state — drives the skeleton
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -195,13 +267,16 @@ export default function SettingsScreen() {
 
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [otherReasonText, setOtherReasonText] = useState("");
-  const [isSubmittingInactivation, setIsSubmittingInactivation] = useState(false);
+  const [isSubmittingInactivation, setIsSubmittingInactivation] =
+    useState(false);
 
   const headerOpacity = useSharedValue(0);
   useEffect(() => {
     headerOpacity.value = withTiming(1, { duration: 380 });
   }, []);
-  const headerStyle = useAnimatedStyle(() => ({ opacity: headerOpacity.value }));
+  const headerStyle = useAnimatedStyle(() => ({
+    opacity: headerOpacity.value,
+  }));
 
   // Content fade-in once the skeleton is replaced by real data
   const contentOpacity = useSharedValue(0);
@@ -210,7 +285,9 @@ export default function SettingsScreen() {
       contentOpacity.value = withTiming(1, { duration: 300 });
     }
   }, [isInitialLoading]);
-  const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+  }));
 
   // ---- Fetch settings when screen is viewed ----
   const loadDatabaseSettings = useCallback(async () => {
@@ -220,8 +297,8 @@ export default function SettingsScreen() {
 
       const response = await fetch(`${API_BASE_URL}/api/user/settings`, {
         headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
       const data = await response.json();
@@ -247,7 +324,7 @@ export default function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadDatabaseSettings();
-    }, [loadDatabaseSettings])
+    }, [loadDatabaseSettings]),
   );
 
   // ---- Avatar picking: stages a pending preview, does NOT save yet ----
@@ -277,7 +354,10 @@ export default function SettingsScreen() {
     setPendingPictureBase64(null);
     setShouldRemovePicture(true);
     setIsAvatarModalVisible(false);
-    toastRef.current?.show({ message: "Picture flagged for removal. Click update to save.", type: "success" });
+    toastRef.current?.show({
+      message: "Picture flagged for removal. Click update to save.",
+      type: "success",
+    });
   };
 
   const handleCancelPendingPicture = useCallback(() => {
@@ -296,8 +376,8 @@ export default function SettingsScreen() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: fullName,
@@ -314,12 +394,21 @@ export default function SettingsScreen() {
         setProfilePicture(pendingPictureUri);
         setPendingPictureUri(null);
         setPendingPictureBase64(null);
-        toastRef.current?.show({ message: "Profile picture updated!", type: "success" });
+        toastRef.current?.show({
+          message: "Profile picture updated!",
+          type: "success",
+        });
       } else {
-        toastRef.current?.show({ message: data.message || "Failed to update picture.", type: "error" });
+        toastRef.current?.show({
+          message: data.message || "Failed to update picture.",
+          type: "error",
+        });
       }
     } catch (err) {
-      toastRef.current?.show({ message: "Network connection error.", type: "error" });
+      toastRef.current?.show({
+        message: "Network connection error.",
+        type: "error",
+      });
     } finally {
       setIsUploadingPicture(false);
     }
@@ -327,7 +416,10 @@ export default function SettingsScreen() {
 
   const handleUpdateProfile = useCallback(async () => {
     if (!fullName.trim() || !email.trim()) {
-      toastRef.current?.show({ message: "Name and email cannot be empty.", type: "error" });
+      toastRef.current?.show({
+        message: "Name and email cannot be empty.",
+        type: "error",
+      });
       return;
     }
     setIsSavingProfile(true);
@@ -339,8 +431,8 @@ export default function SettingsScreen() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: fullName,
@@ -354,40 +446,55 @@ export default function SettingsScreen() {
       const data = await response.json();
 
       if (response.ok) {
-        toastRef.current?.show({ message: data.message || "Profile updated successfully!", type: "success" });
+        toastRef.current?.show({
+          message: data.message || "Profile updated successfully!",
+          type: "success",
+        });
         setShouldRemovePicture(false);
         setShowEditProfile(false);
       } else {
-        toastRef.current?.show({ message: data.message || "Failed to update profile.", type: "error" });
+        toastRef.current?.show({
+          message: data.message || "Failed to update profile.",
+          type: "error",
+        });
       }
     } catch (err) {
-      toastRef.current?.show({ message: "Network connection error.", type: "error" });
+      toastRef.current?.show({
+        message: "Network connection error.",
+        type: "error",
+      });
     } finally {
       setIsSavingProfile(false);
     }
   }, [fullName, email, phone, shouldRemovePicture]);
 
-  const handleToggleChange = useCallback(async (key: "order_notifications" | "new_products", value: boolean) => {
-    if (key === "order_notifications") setOrderNotifications(value);
-    if (key === "new_products") setNewProductsNotifications(value);
+  const handleToggleChange = useCallback(
+    async (key: "order_notifications" | "new_products", value: boolean) => {
+      if (key === "order_notifications") setOrderNotifications(value);
+      if (key === "new_products") setNewProductsNotifications(value);
 
-    try {
-      const authProfile = await getUserProfile();
-      const token = authProfile?.token || "";
+      try {
+        const authProfile = await getUserProfile();
+        const token = authProfile?.token || "";
 
-      await fetch(`${API_BASE_URL}/api/user/settings/toggle`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ key, value: value ? 1 : 0 }),
-      });
-    } catch (err) {
-      console.error("Failed syncing notification preference toggle row:", err);
-    }
-  }, []);
+        await fetch(`${API_BASE_URL}/api/user/settings/toggle`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ key, value: value ? 1 : 0 }),
+        });
+      } catch (err) {
+        console.error(
+          "Failed syncing notification preference toggle row:",
+          err,
+        );
+      }
+    },
+    [],
+  );
 
   const handleSignOut = useCallback(async () => {
     setShowSignOutConfirm(false);
@@ -396,7 +503,7 @@ export default function SettingsScreen() {
       const token = authProfile?.token || "";
       await fetch(`${API_BASE_URL}/api/logout`, {
         method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
     } catch (e) {}
     await deleteAllUserData();
@@ -407,10 +514,12 @@ export default function SettingsScreen() {
   }, []);
 
   const canSubmitDeletion =
-    selectedReason !== null && (selectedReason !== "Other" || otherReasonText.trim().length > 0);
+    selectedReason !== null &&
+    (selectedReason !== "Other" || otherReasonText.trim().length > 0);
 
   const handleRequestAccountInactivation = useCallback(async () => {
-    const reason = selectedReason === "Other" ? otherReasonText.trim() : selectedReason;
+    const reason =
+      selectedReason === "Other" ? otherReasonText.trim() : selectedReason;
 
     if (!reason) {
       toastRef.current?.show({
@@ -425,15 +534,18 @@ export default function SettingsScreen() {
       const authProfile = await getUserProfile();
       const token = authProfile?.token || "";
 
-      const response = await fetch(`${API_BASE_URL}/api/user/inactivate-request`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
+      const response = await fetch(
+        `${API_BASE_URL}/api/user/inactivate-request`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ reason }),
         },
-        body: JSON.stringify({ reason }),
-      });
+      );
 
       const data = await response.json();
 
@@ -453,7 +565,10 @@ export default function SettingsScreen() {
         });
       }
     } catch (err) {
-      toastRef.current?.show({ message: "Network connection error.", type: "error" });
+      toastRef.current?.show({
+        message: "Network connection error.",
+        type: "error",
+      });
     } finally {
       setIsSubmittingInactivation(false);
     }
@@ -462,28 +577,45 @@ export default function SettingsScreen() {
   const fallbackLetter = username
     ? username.charAt(0).toUpperCase()
     : fullName
-    ? fullName.charAt(0).toUpperCase()
-    : "U";
+      ? fullName.charAt(0).toUpperCase()
+      : "U";
 
   const hasPendingPicture = pendingPictureUri !== null;
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.white }]} edges={["top"]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: colors.white }]}
+      edges={["top"]}
+    >
       <Animated.View style={[styles.header, headerStyle]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={22} color={colors.darkText} />
-          <Text style={[styles.backLabel, { color: colors.darkText }]}>Back</Text>
+          <Text style={[styles.backLabel, { color: colors.darkText }]}>
+            Back
+          </Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.darkText }]}>Settings</Text>
+        <Text style={[styles.headerTitle, { color: colors.darkText }]}>
+          Settings
+        </Text>
         <Pressable
           onPress={() => router.push("/notifications" as never)}
-          style={[styles.iconButton, { backgroundColor: colors.inputBackground }]}
+          style={[
+            styles.iconButton,
+            { backgroundColor: colors.inputBackground },
+          ]}
         >
-          <Ionicons name="notifications-outline" size={18} color={colors.darkText} />
+          <Ionicons
+            name="notifications-outline"
+            size={18}
+            color={colors.darkText}
+          />
         </Pressable>
       </Animated.View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+      >
         {isInitialLoading ? (
           <SettingsSkeleton colors={colors} />
         ) : (
@@ -492,14 +624,25 @@ export default function SettingsScreen() {
             <SectionCard colors={colors} index={0}>
               <View style={styles.profileRow}>
                 <View style={styles.avatarPressable}>
-                  <Pressable onPress={() => !hasPendingPicture && setIsAvatarModalVisible(true)}>
+                  <Pressable
+                    onPress={() =>
+                      !hasPendingPicture && setIsAvatarModalVisible(true)
+                    }
+                  >
                     {(pendingPictureUri ?? profilePicture) ? (
                       <Image
-                        source={{ uri: (pendingPictureUri ?? profilePicture) as string }}
+                        source={{
+                          uri: (pendingPictureUri ?? profilePicture) as string,
+                        }}
                         style={styles.avatarImage}
                       />
                     ) : (
-                      <View style={[styles.avatarCircle, { backgroundColor: colors.primaryBlue }]}>
+                      <View
+                        style={[
+                          styles.avatarCircle,
+                          { backgroundColor: colors.primaryBlue },
+                        ]}
+                      >
                         <Text style={styles.avatarText}>{fallbackLetter}</Text>
                       </View>
                     )}
@@ -510,7 +653,13 @@ export default function SettingsScreen() {
                       <Pressable
                         onPress={handleCancelPendingPicture}
                         disabled={isUploadingPicture}
-                        style={[styles.avatarActionBtn, { backgroundColor: colors.error, borderColor: colors.white }]}
+                        style={[
+                          styles.avatarActionBtn,
+                          {
+                            backgroundColor: colors.error,
+                            borderColor: colors.white,
+                          },
+                        ]}
                       >
                         <Ionicons name="close" size={13} color="#FFF" />
                       </Pressable>
@@ -519,7 +668,10 @@ export default function SettingsScreen() {
                         disabled={isUploadingPicture}
                         style={[
                           styles.avatarActionBtn,
-                          { backgroundColor: colors.success ?? "#22C55E", borderColor: colors.white },
+                          {
+                            backgroundColor: colors.success ?? "#22C55E",
+                            borderColor: colors.white,
+                          },
                         ]}
                       >
                         {isUploadingPicture ? (
@@ -531,7 +683,13 @@ export default function SettingsScreen() {
                     </View>
                   ) : (
                     <View
-                      style={[styles.avatarEditBadge, { backgroundColor: colors.primaryBlue, borderColor: colors.white }]}
+                      style={[
+                        styles.avatarEditBadge,
+                        {
+                          backgroundColor: colors.primaryBlue,
+                          borderColor: colors.white,
+                        },
+                      ]}
                     >
                       <Ionicons name="camera" size={12} color="#FFF" />
                     </View>
@@ -540,22 +698,53 @@ export default function SettingsScreen() {
 
                 <View style={styles.profileInfo}>
                   <View style={styles.profileNameRow}>
-                    <Text style={[styles.profileName, { color: colors.darkText }]}>{fullName || "—"}</Text>
+                    <Text
+                      style={[styles.profileName, { color: colors.darkText }]}
+                    >
+                      {fullName || "—"}
+                    </Text>
                     {accountType === "distributor" && (
-                      <View style={[styles.tierBadge, { backgroundColor: colors.goldAccent + "1A" }]}>
-                        <Ionicons name="star" size={11} color={colors.goldAccent} />
-                        <Text style={[styles.tierText, { color: colors.goldAccent }]}>Distributor</Text>
+                      <View
+                        style={[
+                          styles.tierBadge,
+                          { backgroundColor: colors.goldAccent + "1A" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="star"
+                          size={11}
+                          color={colors.goldAccent}
+                        />
+                        <Text
+                          style={[
+                            styles.tierText,
+                            { color: colors.goldAccent },
+                          ]}
+                        >
+                          Distributor
+                        </Text>
                       </View>
                     )}
                   </View>
-                  <Text style={[styles.profileMeta, { color: colors.grayText }]}>{email || "—"}</Text>
-                  <Text style={[styles.profileMeta, { color: colors.grayText }]}>{phone || "—"}</Text>
+                  <Text
+                    style={[styles.profileMeta, { color: colors.grayText }]}
+                  >
+                    {email || "—"}
+                  </Text>
+                  <Text
+                    style={[styles.profileMeta, { color: colors.grayText }]}
+                  >
+                    {phone || "—"}
+                  </Text>
                 </View>
               </View>
 
               <Pressable
                 onPress={() => setShowEditProfile(true)}
-                style={[styles.editProfileButton, { backgroundColor: colors.primaryBlue }]}
+                style={[
+                  styles.editProfileButton,
+                  { backgroundColor: colors.primaryBlue },
+                ]}
               >
                 <Ionicons name="pencil" size={15} color="#FFF" />
                 <Text style={styles.editProfileText}>Edit Profile</Text>
@@ -567,32 +756,56 @@ export default function SettingsScreen() {
             <SectionCard colors={colors} index={1}>
               <View style={styles.toggleRow}>
                 <View style={styles.toggleTextContainer}>
-                  <Text style={[styles.toggleTitle, { color: colors.darkText }]}>Order Notifications</Text>
-                  <Text style={[styles.toggleSubtitle, { color: colors.grayText }]}>
+                  <Text
+                    style={[styles.toggleTitle, { color: colors.darkText }]}
+                  >
+                    Order Notifications
+                  </Text>
+                  <Text
+                    style={[styles.toggleSubtitle, { color: colors.grayText }]}
+                  >
                     Alerts when dispatch is on the way
                   </Text>
                 </View>
                 <Switch
                   value={orderNotifications}
-                  onValueChange={(val) => handleToggleChange("order_notifications", val)}
-                  trackColor={{ false: colors.border, true: colors.primaryBlue }}
+                  onValueChange={(val) =>
+                    handleToggleChange("order_notifications", val)
+                  }
+                  trackColor={{
+                    false: colors.border,
+                    true: colors.primaryBlue,
+                  }}
                   thumbColor="#FFFFFF"
                 />
               </View>
 
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
 
               <View style={styles.toggleRow}>
                 <View style={styles.toggleTextContainer}>
-                  <Text style={[styles.toggleTitle, { color: colors.darkText }]}>New Products</Text>
-                  <Text style={[styles.toggleSubtitle, { color: colors.grayText }]}>
+                  <Text
+                    style={[styles.toggleTitle, { color: colors.darkText }]}
+                  >
+                    New Products
+                  </Text>
+                  <Text
+                    style={[styles.toggleSubtitle, { color: colors.grayText }]}
+                  >
                     Get broadcast logs when new inventory arrives
                   </Text>
                 </View>
                 <Switch
                   value={newProductsNotifications}
-                  onValueChange={(val) => handleToggleChange("new_products", val)}
-                  trackColor={{ false: colors.border, true: colors.primaryBlue }}
+                  onValueChange={(val) =>
+                    handleToggleChange("new_products", val)
+                  }
+                  trackColor={{
+                    false: colors.border,
+                    true: colors.primaryBlue,
+                  }}
                   thumbColor="#FFFFFF"
                 />
               </View>
@@ -607,9 +820,19 @@ export default function SettingsScreen() {
                 { label: "Contact Support", icon: "headset-outline" },
               ].map((item) => (
                 <Pressable key={item.label} style={styles.menuRow}>
-                  <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={18} color={colors.grayText} />
-                  <Text style={[styles.menuLabel, { color: colors.darkText }]}>{item.label}</Text>
-                  <Ionicons name="chevron-forward" size={16} color={colors.grayText} />
+                  <Ionicons
+                    name={item.icon as keyof typeof Ionicons.glyphMap}
+                    size={18}
+                    color={colors.grayText}
+                  />
+                  <Text style={[styles.menuLabel, { color: colors.darkText }]}>
+                    {item.label}
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={colors.grayText}
+                  />
                 </Pressable>
               ))}
             </SectionCard>
@@ -617,16 +840,43 @@ export default function SettingsScreen() {
             {/* Danger Zone */}
             <SectionTitle title="Danger Zone" colors={colors} />
             <View style={[styles.dangerCard, { borderColor: colors.error }]}>
-              <Pressable onPress={() => setIsDeleteModalVisible(true)} style={styles.dangerRow}>
+              <Pressable
+                onPress={() => setIsDeleteModalVisible(true)}
+                style={styles.dangerRow}
+              >
                 <Ionicons name="trash-outline" size={18} color={colors.error} />
-                <Text style={[styles.dangerLabel, { color: colors.error }]}>Request Account Deletion</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.error} />
+                <Text style={[styles.dangerLabel, { color: colors.error }]}>
+                  Request Account Deletion
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={colors.error}
+                />
               </Pressable>
-              <View style={[styles.divider, { backgroundColor: colors.error + "30" }]} />
-              <Pressable onPress={() => setShowSignOutConfirm(true)} style={styles.dangerRow}>
-                <Ionicons name="log-out-outline" size={18} color={colors.error} />
-                <Text style={[styles.dangerLabel, { color: colors.error }]}>Sign Out</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.error} />
+              <View
+                style={[
+                  styles.divider,
+                  { backgroundColor: colors.error + "30" },
+                ]}
+              />
+              <Pressable
+                onPress={() => setShowSignOutConfirm(true)}
+                style={styles.dangerRow}
+              >
+                <Ionicons
+                  name="log-out-outline"
+                  size={18}
+                  color={colors.error}
+                />
+                <Text style={[styles.dangerLabel, { color: colors.error }]}>
+                  Sign Out
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={colors.error}
+                />
               </Pressable>
             </View>
           </Animated.View>
@@ -638,18 +888,40 @@ export default function SettingsScreen() {
       <BottomTabBar activeTab="settings" colors={colors} />
 
       {/* Edit Profile Modal */}
-      <Modal visible={showEditProfile} animationType="slide" onRequestClose={() => setShowEditProfile(false)}>
-        <SafeAreaView style={[styles.modalRoot, { backgroundColor: colors.white }]} edges={["top", "bottom"]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+      <Modal
+        visible={showEditProfile}
+        animationType="slide"
+        onRequestClose={() => setShowEditProfile(false)}
+      >
+        <SafeAreaView
+          style={[styles.modalRoot, { backgroundColor: colors.white }]}
+          edges={["top", "bottom"]}
+        >
+          <View
+            style={[styles.modalHeader, { borderBottomColor: colors.border }]}
+          >
             <Pressable onPress={() => setShowEditProfile(false)} hitSlop={8}>
               <Ionicons name="close" size={24} color={colors.darkText} />
             </Pressable>
-            <Text style={[styles.modalTitle, { color: colors.darkText }]}>Edit Profile</Text>
+            <Text style={[styles.modalTitle, { color: colors.darkText }]}>
+              Edit Profile
+            </Text>
             <View style={{ width: 24 }} />
           </View>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
-              <SettingsInput label="Full Name" value={fullName} onChangeText={setFullName} colors={colors} />
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
+            <ScrollView
+              contentContainerStyle={styles.modalScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              <SettingsInput
+                label="Full Name"
+                value={fullName}
+                onChangeText={setFullName}
+                colors={colors}
+              />
               <SettingsInput
                 label="Email Address"
                 value={email}
@@ -668,7 +940,10 @@ export default function SettingsScreen() {
               <Pressable
                 onPress={handleUpdateProfile}
                 disabled={isSavingProfile}
-                style={[styles.saveButton, { backgroundColor: colors.primaryBlue }]}
+                style={[
+                  styles.saveButton,
+                  { backgroundColor: colors.primaryBlue },
+                ]}
               >
                 {isSavingProfile ? (
                   <ActivityIndicator color="#FFF" size="small" />
@@ -682,51 +957,109 @@ export default function SettingsScreen() {
       </Modal>
 
       {/* Avatar Modal */}
-      <Modal visible={isAvatarModalVisible} transparent animationType="fade" onRequestClose={() => setIsAvatarModalVisible(false)}>
-        <View style={[styles.confirmOverlay, { backgroundColor: colors.overlay }]}>
+      <Modal
+        visible={isAvatarModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsAvatarModalVisible(false)}
+      >
+        <View
+          style={[styles.confirmOverlay, { backgroundColor: colors.overlay }]}
+        >
           <View style={[styles.confirmCard, { backgroundColor: colors.white }]}>
-            <Text style={[styles.confirmTitle, { color: colors.darkText, textAlign: "center" }]}>
+            <Text
+              style={[
+                styles.confirmTitle,
+                { color: colors.darkText, textAlign: "center" },
+              ]}
+            >
               Manage Profile Picture
             </Text>
             <View style={styles.modalPreviewContainer}>
               {profilePicture ? (
-                <Image source={{ uri: profilePicture }} style={styles.largePreviewImage} />
+                <Image
+                  source={{ uri: profilePicture }}
+                  style={styles.largePreviewImage}
+                />
               ) : (
-                <View style={[styles.largePreviewFallback, { backgroundColor: colors.primaryBlue }]}>
-                  <Text style={styles.largePreviewFallbackText}>{fallbackLetter}</Text>
+                <View
+                  style={[
+                    styles.largePreviewFallback,
+                    { backgroundColor: colors.primaryBlue },
+                  ]}
+                >
+                  <Text style={styles.largePreviewFallbackText}>
+                    {fallbackLetter}
+                  </Text>
                 </View>
               )}
             </View>
-            <Pressable onPress={handlePickImage} style={[styles.saveButton, { backgroundColor: colors.primaryBlue }]}>
+            <Pressable
+              onPress={handlePickImage}
+              style={[
+                styles.saveButton,
+                { backgroundColor: colors.primaryBlue },
+              ]}
+            >
               <Text style={styles.saveButtonText}>Upload New Photo</Text>
             </Pressable>
             {profilePicture && (
               <Pressable
                 onPress={handleRemoveImage}
-                style={[styles.saveButton, { backgroundColor: colors.error, marginTop: 10 }]}
+                style={[
+                  styles.saveButton,
+                  { backgroundColor: colors.error, marginTop: 10 },
+                ]}
               >
                 <Text style={styles.saveButtonText}>Remove Photo</Text>
               </Pressable>
             )}
-            <Pressable onPress={() => setIsAvatarModalVisible(false)} style={{ marginTop: 14, alignItems: "center" }}>
-              <Text style={{ color: colors.darkText, fontWeight: "700", fontSize: 14 }}>Close</Text>
+            <Pressable
+              onPress={() => setIsAvatarModalVisible(false)}
+              style={{ marginTop: 14, alignItems: "center" }}
+            >
+              <Text
+                style={{
+                  color: colors.darkText,
+                  fontWeight: "700",
+                  fontSize: 14,
+                }}
+              >
+                Close
+              </Text>
             </Pressable>
           </View>
         </View>
       </Modal>
 
       {/* Delete Account Modal */}
-      <Modal visible={isDeleteModalVisible} animationType="slide" onRequestClose={() => setIsDeleteModalVisible(false)}>
-        <SafeAreaView style={[styles.modalRoot, { backgroundColor: colors.white }]} edges={["top", "bottom"]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Pressable onPress={() => setIsDeleteModalVisible(false)} hitSlop={8}>
+      <Modal
+        visible={isDeleteModalVisible}
+        animationType="slide"
+        onRequestClose={() => setIsDeleteModalVisible(false)}
+      >
+        <SafeAreaView
+          style={[styles.modalRoot, { backgroundColor: colors.white }]}
+          edges={["top", "bottom"]}
+        >
+          <View
+            style={[styles.modalHeader, { borderBottomColor: colors.border }]}
+          >
+            <Pressable
+              onPress={() => setIsDeleteModalVisible(false)}
+              hitSlop={8}
+            >
               <Ionicons name="close" size={24} color={colors.darkText} />
             </Pressable>
-            <Text style={[styles.modalTitle, { color: colors.error }]}>Delete Account</Text>
+            <Text style={[styles.modalTitle, { color: colors.error }]}>
+              Delete Account
+            </Text>
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={styles.modalScroll}>
-            <Text style={[styles.deleteHeading, { color: colors.darkText }]}>We're sorry to see you go.</Text>
+            <Text style={[styles.deleteHeading, { color: colors.darkText }]}>
+              We're sorry to see you go.
+            </Text>
             <Text style={[styles.deleteSubtitle, { color: colors.grayText }]}>
               Why are you requesting deletion?
             </Text>
@@ -737,15 +1070,26 @@ export default function SettingsScreen() {
                 onPress={() => setSelectedReason(reason)}
                 style={[
                   styles.reasonRow,
-                  { borderColor: selectedReason === reason ? colors.error : colors.border },
+                  {
+                    borderColor:
+                      selectedReason === reason ? colors.error : colors.border,
+                  },
                 ]}
               >
                 <Ionicons
-                  name={selectedReason === reason ? "radio-button-on" : "radio-button-off"}
+                  name={
+                    selectedReason === reason
+                      ? "radio-button-on"
+                      : "radio-button-off"
+                  }
                   size={20}
-                  color={selectedReason === reason ? colors.error : colors.grayText}
+                  color={
+                    selectedReason === reason ? colors.error : colors.grayText
+                  }
                 />
-                <Text style={[styles.reasonText, { color: colors.darkText }]}>{reason}</Text>
+                <Text style={[styles.reasonText, { color: colors.darkText }]}>
+                  {reason}
+                </Text>
               </Pressable>
             ))}
 
@@ -759,7 +1103,11 @@ export default function SettingsScreen() {
                 numberOfLines={4}
                 style={[
                   styles.textArea,
-                  { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.darkText },
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.border,
+                    color: colors.darkText,
+                  },
                 ]}
               />
             )}
@@ -773,14 +1121,22 @@ export default function SettingsScreen() {
                 onPress={() => setIsDeleteModalVisible(false)}
                 style={[styles.cancelButton, { borderColor: colors.border }]}
               >
-                <Text style={[styles.cancelButtonText, { color: colors.darkText }]}>Cancel</Text>
+                <Text
+                  style={[styles.cancelButtonText, { color: colors.darkText }]}
+                >
+                  Cancel
+                </Text>
               </Pressable>
               <Pressable
                 onPress={handleRequestAccountInactivation}
                 disabled={!canSubmitDeletion || isSubmittingInactivation}
                 style={[
                   styles.deleteButton,
-                  { backgroundColor: canSubmitDeletion ? colors.error : colors.grayText },
+                  {
+                    backgroundColor: canSubmitDeletion
+                      ? colors.error
+                      : colors.grayText,
+                  },
                 ]}
               >
                 <Text style={styles.deleteButtonText}>
@@ -793,10 +1149,19 @@ export default function SettingsScreen() {
       </Modal>
 
       {/* Sign Out Confirm */}
-      <Modal visible={showSignOutConfirm} transparent animationType="fade" onRequestClose={() => setShowSignOutConfirm(false)}>
-        <View style={[styles.confirmOverlay, { backgroundColor: colors.overlay }]}>
+      <Modal
+        visible={showSignOutConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSignOutConfirm(false)}
+      >
+        <View
+          style={[styles.confirmOverlay, { backgroundColor: colors.overlay }]}
+        >
           <View style={[styles.confirmCard, { backgroundColor: colors.white }]}>
-            <Text style={[styles.confirmTitle, { color: colors.darkText }]}>Sign Out</Text>
+            <Text style={[styles.confirmTitle, { color: colors.darkText }]}>
+              Sign Out
+            </Text>
             <Text style={[styles.confirmMessage, { color: colors.grayText }]}>
               Are you sure you want to sign out?
             </Text>
@@ -805,9 +1170,16 @@ export default function SettingsScreen() {
                 onPress={() => setShowSignOutConfirm(false)}
                 style={[styles.cancelButton, { borderColor: colors.border }]}
               >
-                <Text style={[styles.cancelButtonText, { color: colors.darkText }]}>Cancel</Text>
+                <Text
+                  style={[styles.cancelButtonText, { color: colors.darkText }]}
+                >
+                  Cancel
+                </Text>
               </Pressable>
-              <Pressable onPress={handleSignOut} style={[styles.deleteButton, { backgroundColor: colors.error }]}>
+              <Pressable
+                onPress={handleSignOut}
+                style={[styles.deleteButton, { backgroundColor: colors.error }]}
+              >
                 <Text style={styles.deleteButtonText}>Sign Out</Text>
               </Pressable>
             </View>
@@ -824,8 +1196,18 @@ export default function SettingsScreen() {
 // SectionCard + SectionTitle helpers
 // ---------------------------------------------------------------------------
 
-function SectionTitle({ title, colors }: { title: string; colors: ThemeColors }) {
-  return <Text style={[styles.sectionTitle, { color: colors.grayText }]}>{title.toUpperCase()}</Text>;
+function SectionTitle({
+  title,
+  colors,
+}: {
+  title: string;
+  colors: ThemeColors;
+}) {
+  return (
+    <Text style={[styles.sectionTitle, { color: colors.grayText }]}>
+      {title.toUpperCase()}
+    </Text>
+  );
 }
 
 function SectionCard({
@@ -843,7 +1225,10 @@ function SectionCard({
   useEffect(() => {
     const easing = ReanimatedEasing.out(ReanimatedEasing.cubic);
     opacity.value = withDelay(index * 70, withTiming(1, { duration: 380 }));
-    translateY.value = withDelay(index * 70, withTiming(0, { duration: 380, easing }));
+    translateY.value = withDelay(
+      index * 70,
+      withTiming(0, { duration: 380, easing }),
+    );
   }, [index]);
 
   const animStyle = useAnimatedStyle(() => ({
@@ -853,7 +1238,11 @@ function SectionCard({
 
   return (
     <Animated.View
-      style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }, animStyle]}
+      style={[
+        styles.sectionCard,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+        animStyle,
+      ]}
     >
       {children}
     </Animated.View>
@@ -882,7 +1271,9 @@ function SettingsInput({
   const [focused, setFocused] = useState(false);
   return (
     <View style={styles.inputWrapper}>
-      <Text style={[styles.fieldLabel, { color: colors.grayText }]}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: colors.grayText }]}>
+        {label}
+      </Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -919,12 +1310,29 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 12,
   },
-  backButton: { flexDirection: "row", alignItems: "center", gap: 2, minWidth: 64 },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    minWidth: 64,
+  },
   backLabel: { fontSize: 15, fontWeight: "600" },
   headerTitle: { fontSize: 17, fontWeight: "800" },
-  iconButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   scroll: { paddingHorizontal: 20, paddingTop: 8 },
-  sectionTitle: { fontSize: 11, fontWeight: "700", letterSpacing: 1, marginTop: 20, marginBottom: 8 },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginTop: 20,
+    marginBottom: 8,
+  },
   sectionCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -936,9 +1344,20 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
-  profileRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 14 },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 14,
+  },
   avatarPressable: { position: "relative" },
-  avatarCircle: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
+  avatarCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   avatarImage: { width: 60, height: 60, borderRadius: 30 },
   avatarText: { fontSize: 24, fontWeight: "800", color: "#FFF" },
   avatarEditBadge: {
@@ -968,24 +1387,68 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   profileInfo: { flex: 1 },
-  profileNameRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  profileNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
   profileName: { fontSize: 16, fontWeight: "800" },
-  tierBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+  tierBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
   tierText: { fontSize: 10, fontWeight: "700" },
   profileMeta: { fontSize: 12, marginTop: 2 },
-  editProfileButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 42, borderRadius: 12 },
+  editProfileButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 42,
+    borderRadius: 12,
+  },
   editProfileText: { fontSize: 14, fontWeight: "700", color: "#FFF" },
-  toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+  },
   toggleTextContainer: { flex: 1, paddingRight: 16 },
   toggleTitle: { fontSize: 14, fontWeight: "700" },
   toggleSubtitle: { fontSize: 11, marginTop: 2 },
   divider: { height: 1, marginVertical: 12 },
-  menuRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+  },
   menuLabel: { flex: 1, fontSize: 14, fontWeight: "600" },
-  dangerCard: { borderWidth: 1.5, borderRadius: 16, marginBottom: 4, overflow: "hidden" },
-  dangerRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
+  dangerCard: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    marginBottom: 4,
+    overflow: "hidden",
+  },
+  dangerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+  },
   dangerLabel: { flex: 1, fontSize: 14, fontWeight: "700" },
-  skeletonRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
+  skeletonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+  },
   modalRoot: { flex: 1 },
   modalHeader: {
     flexDirection: "row",
@@ -999,16 +1462,42 @@ const styles = StyleSheet.create({
   modalScroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
   inputWrapper: { marginBottom: 16 },
   fieldLabel: { fontSize: 13, fontWeight: "600", marginBottom: 6 },
-  textInput: { height: 50, borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, fontSize: 15 },
-  saveButton: { height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", marginTop: 8 },
+  textInput: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    fontSize: 15,
+  },
+  saveButton: {
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
   saveButtonText: { fontSize: 16, fontWeight: "800", color: "#FFF" },
   modalPreviewContainer: { alignItems: "center", marginBottom: 20 },
   largePreviewImage: { width: 140, height: 140, borderRadius: 70 },
-  largePreviewFallback: { width: 140, height: 140, borderRadius: 70, justifyContent: "center", alignItems: "center" },
+  largePreviewFallback: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   largePreviewFallbackText: { color: "#FFF", fontSize: 48, fontWeight: "800" },
   deleteHeading: { fontSize: 20, fontWeight: "800", marginBottom: 6 },
   deleteSubtitle: { fontSize: 14, marginBottom: 16 },
-  reasonRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1.5, marginBottom: 8 },
+  reasonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginBottom: 8,
+  },
   reasonText: { flex: 1, fontSize: 14 },
   textArea: {
     borderWidth: 1.5,
@@ -1021,13 +1510,36 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
   },
-  warningText: { fontSize: 13, fontWeight: "700", textAlign: "center", marginBottom: 20 },
+  warningText: {
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 20,
+  },
   deleteButtonsRow: { flexDirection: "row", gap: 12 },
-  cancelButton: { flex: 1, height: 50, borderRadius: 25, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  cancelButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cancelButtonText: { fontSize: 14, fontWeight: "700" },
-  deleteButton: { flex: 1, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center" },
+  deleteButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   deleteButtonText: { fontSize: 14, fontWeight: "700", color: "#FFF" },
-  confirmOverlay: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 },
+  confirmOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
   confirmCard: { width: "100%", borderRadius: 20, padding: 24 },
   confirmTitle: { fontSize: 17, fontWeight: "800", marginBottom: 8 },
   confirmMessage: { fontSize: 14, lineHeight: 20, marginBottom: 20 },
