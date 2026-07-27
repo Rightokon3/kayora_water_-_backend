@@ -46,7 +46,7 @@ type TouchedFields = {
 // - iOS simulator and Expo Web: localhost correctly reaches your host machine.
 const API_BASE_URL =
   Platform.OS === "android"
-    ? "http://10.0.2.2:8000"
+    ? "https://kayorabackend-production.up.railway.app"
     : "https://kayorabackend-production.up.railway.app";
 
 export default function SignupScreen() {

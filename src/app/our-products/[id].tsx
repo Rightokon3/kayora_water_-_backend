@@ -1,12 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, {
-    useCallback,
-    useEffect,
-    useRef,
-    useState
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Platform,
@@ -17,7 +12,7 @@ import {
     Text,
     TouchableOpacity,
     useColorScheme,
-    View
+    View,
 } from "react-native";
 import Animated, {
     FadeIn,
@@ -28,9 +23,7 @@ import Animated, {
     withSpring,
     withTiming,
 } from "react-native-reanimated";
-import {
-    useSafeAreaInsets
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Import local service layout utilities
 import { addToCart, getUserProfile } from "@/services/storage";
@@ -54,7 +47,7 @@ const C = {
 
 const API_BASE_URL =
   Platform.OS === "android"
-    ? "http://10.0.2.2:8000"
+    ? "https://kayorabackend-production.up.railway.app"
     : "https://kayorabackend-production.up.railway.app";
 
 interface UsedFor {

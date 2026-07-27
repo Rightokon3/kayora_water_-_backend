@@ -50,7 +50,7 @@ const LABEL_OPTIONS: AddressLabelType[] = [
 ];
 const API_BASE_URL =
   Platform.OS === "android"
-    ? "http://10.0.2.2:8000"
+    ? "https://kayorabackend-production.up.railway.app"
     : "https://kayorabackend-production.up.railway.app";
 
 function generateId(): string {
