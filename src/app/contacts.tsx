@@ -50,10 +50,7 @@ import { AnimatedToast, AnimatedToastRef } from "@/components/AnimatedToast";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { StaticMap } from "@/components/StaticMap";
 import { useTheme } from "@/hooks/useTheme";
-import {
-  BusinessType,
-  getUserProfile,
-} from "@/services/storage";
+import { BusinessType, getUserProfile } from "@/services/storage";
 import { validateEmail, validatePhone } from "../../utils/validation";
 
 // ---------------------------------------------------------------------------
@@ -150,7 +147,7 @@ export default function ContactsScreen() {
   }, []);
 
   const handleNotifications = useCallback(() => {
-    router.push("/notifications" as never);
+    router.push("#" as never);
   }, []);
 
   const handleApply = useCallback(() => {
@@ -658,8 +655,8 @@ function ApplicationModal({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`,
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           fullName: form.fullName.trim(),

@@ -598,7 +598,7 @@ export default function SettingsScreen() {
           Settings
         </Text>
         <Pressable
-          onPress={() => router.push("/notifications" as never)}
+          onPress={() => router.push("#" as never)}
           style={[
             styles.iconButton,
             { backgroundColor: colors.inputBackground },
