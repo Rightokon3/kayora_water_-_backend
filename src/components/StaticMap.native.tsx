@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Appearance } from "react-native";
 import MapLibreGL from "@maplibre/maplibre-react-native";
-import { ensureMapLibreReady } from "../utils/mapLibreInit";
+import { ensureMapLibreReady } from "../../utils/mapLibreInit";
 
 const STYLE_LIGHT = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 const STYLE_DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
