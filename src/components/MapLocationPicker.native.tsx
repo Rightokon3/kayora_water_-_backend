@@ -5,8 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import MapLibreGL from "@maplibre/maplibre-react-native";
 import { Colors } from "@/constants/colors";
 import { reverseGeocode } from "./../../utils/reverseGeocode";
-
-MapLibreGL.setAccessToken(null);
+import { ensureMapLibreReady } from "./../../utils/mapLibreInit";
 
 const STYLE_URL = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 const FALLBACK_CENTER = { lat: 6.335, lng: 5.6037 }; // Benin City — same fallback used elsewhere in the app
@@ -32,6 +31,7 @@ export function MapLocationPicker({
   onClose: () => void;
 }) {
   const cameraRef = useRef<MapLibreGL.Camera>(null);
+  const [nativeAvailable, setNativeAvailable] = useState<boolean | null>(null);
 
   const [center, setCenter] = useState({
     lat: initialLatitude ?? FALLBACK_CENTER.lat,
@@ -40,6 +40,10 @@ export function MapLocationPicker({
   const [address, setAddress] = useState<{ title: string; subtitle: string } | null>(null);
   const [geocoding, setGeocoding] = useState(false);
   const [locating, setLocating] = useState(false);
+
+  useEffect(() => {
+    setNativeAvailable(ensureMapLibreReady());
+  }, []);
 
   // Reset to the initial position each time the picker opens.
   useEffect(() => {
@@ -106,21 +110,27 @@ export function MapLocationPicker({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1 }}>
-        <MapLibreGL.MapView
-          style={{ flex: 1 }}
-          styleURL={STYLE_URL}
-          logoEnabled={false}
-          attributionEnabled
-          onRegionDidChange={handleRegionDidChange}
-        >
-          <MapLibreGL.Camera
-            ref={cameraRef}
-            defaultSettings={{
-              centerCoordinate: [center.lng, center.lat],
-              zoomLevel: 15,
-            }}
-          />
-        </MapLibreGL.MapView>
+        {nativeAvailable === false ? (
+          <View style={styles.fallback}>
+            <Text style={styles.fallbackText}>Map unavailable in this build.</Text>
+          </View>
+        ) : nativeAvailable === null ? null : (
+          <MapLibreGL.MapView
+            style={{ flex: 1 }}
+            styleURL={STYLE_URL}
+            logoEnabled={false}
+            attributionEnabled
+            onRegionDidChange={handleRegionDidChange}
+          >
+            <MapLibreGL.Camera
+              ref={cameraRef}
+              defaultSettings={{
+                centerCoordinate: [center.lng, center.lat],
+                zoomLevel: 15,
+              }}
+            />
+          </MapLibreGL.MapView>
+        )}
 
         {/* Fixed center pin — the map pans underneath this, so whatever
             sits at screen-center is the picked coordinate. */}
@@ -157,6 +167,8 @@ export function MapLocationPicker({
 }
 
 const styles = StyleSheet.create({
+  fallback: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  fallbackText: { fontSize: 13, color: Colors.grayText, textAlign: "center" },
   pinWrap: {
     position: "absolute",
     top: "50%",
